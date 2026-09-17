@@ -13,37 +13,38 @@ jobs:
 
     steps:
       - name: Checkout E2E harness
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: trueseal-e2e
 
       - name: Checkout relay
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/trueseal-relay
           path: trueseal-relay
 
       - name: Checkout sync core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/trueseal-sync
           path: trueseal-sync
 
       - name: Checkout TypeScript SDK
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/trueseal-sync-ts
           path: trueseal-sync-ts
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: trueseal-sync-ts/package-lock.json
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: trueseal-relay/go.mod
+          cache-dependency-path: trueseal-relay/go.sum
 
       - uses: dtolnay/rust-toolchain@stable
 
