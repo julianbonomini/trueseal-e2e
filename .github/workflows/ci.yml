@@ -1,0 +1,60 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout E2E harness
+        uses: actions/checkout@v4
+        with:
+          path: trueseal-e2e
+
+      - name: Checkout relay
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-relay
+          token: ${{ secrets.TRUESEAL_READ_TOKEN }}
+          path: trueseal-relay
+
+      - name: Checkout sync core
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-sync
+          token: ${{ secrets.TRUESEAL_READ_TOKEN }}
+          path: trueseal-sync
+
+      - name: Checkout TypeScript SDK
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-sync-ts
+          token: ${{ secrets.TRUESEAL_READ_TOKEN }}
+          path: trueseal-sync-ts
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: trueseal-sync-ts/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: trueseal-relay/go.mod
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Authenticate private Rust dependency
+        env:
+          TRUESEAL_READ_TOKEN: ${{ secrets.TRUESEAL_READ_TOKEN }}
+        run: git config --global url."https://x-access-token:${TRUESEAL_READ_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Run system E2E
+        working-directory: trueseal-e2e
+        run: npm test
