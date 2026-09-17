@@ -23,11 +23,12 @@ const client = await TruesealSyncClient.create({
   namespace: 'e2e',
 })
 
-client.on('message', (blob, senderId) => emit({
+client.on('message', (blob, senderId, messageId) => emit({
   event: 'message',
   text: Buffer.from(blob).toString('utf8'),
   data: Buffer.from(blob).toString('base64'),
   senderId,
+  messageId,
 }))
 client.on('memberRequest', (requestToken, name) => emit({ event: 'memberRequest', requestToken, name }))
 client.on('memberJoined', member => emit({ event: 'memberJoined', member }))

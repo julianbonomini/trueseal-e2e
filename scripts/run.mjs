@@ -10,6 +10,7 @@ const relayRepo = resolve(process.env.TRUESEAL_RELAY_REPO ?? join(workspace, 'tr
 const tsRepo = resolve(process.env.TRUESEAL_TS_REPO ?? join(workspace, 'trueseal-sync-ts'))
 const artifacts = mkdtempSync(join(tmpdir(), 'trueseal-e2e-build-'))
 const relayBin = join(artifacts, 'trueseal-relay')
+const duplicateInboxBin = join(artifacts, 'duplicate-inbox')
 
 process.on('exit', () => rmSync(artifacts, { recursive: true, force: true }))
 
@@ -27,11 +28,19 @@ if (process.env.TRUESEAL_E2E_SKIP_PREPARE !== '1') {
   run('npm', ['ci', '--registry=https://registry.npmjs.org'], tsRepo)
   run('npm', ['run', 'build'], tsRepo)
   run('go', ['build', '-o', relayBin, './cmd/trueseal-relay'], relayRepo)
+  run('go', ['build', '-o', duplicateInboxBin, join(repo, 'scripts', 'duplicate-inbox.go')], relayRepo)
 } else if (!process.env.TRUESEAL_RELAY_BIN) {
   run('go', ['build', '-o', relayBin, './cmd/trueseal-relay'], relayRepo)
 }
 
+if (process.env.TRUESEAL_E2E_SKIP_PREPARE === '1' && !process.env.TRUESEAL_DUPLICATE_INBOX_BIN) {
+  run('go', ['build', '-o', duplicateInboxBin, join(repo, 'scripts', 'duplicate-inbox.go')], relayRepo)
+}
+
 const effectiveRelayBin = resolve(process.env.TRUESEAL_RELAY_BIN ?? relayBin)
+const effectiveDuplicateInboxBin = resolve(
+  process.env.TRUESEAL_DUPLICATE_INBOX_BIN ?? duplicateInboxBin,
+)
 execFileSync(effectiveRelayBin, ['-h'], { stdio: 'ignore' })
 
 run(
@@ -40,6 +49,7 @@ run(
   repo,
   {
     TRUESEAL_RELAY_BIN: effectiveRelayBin,
+    TRUESEAL_DUPLICATE_INBOX_BIN: effectiveDuplicateInboxBin,
     TRUESEAL_TS_REPO: tsRepo,
   },
 )

@@ -1,4 +1,5 @@
-import { deepStrictEqual, ok } from 'node:assert/strict'
+import { deepStrictEqual, notStrictEqual, ok } from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -8,6 +9,7 @@ import { ClientProcess } from '../lib/client-process.mjs'
 import { RelayProcess } from '../lib/relay-process.mjs'
 
 const relayBinary = resolve(process.env.TRUESEAL_RELAY_BIN)
+const duplicateInboxBinary = resolve(process.env.TRUESEAL_DUPLICATE_INBOX_BIN)
 const root = mkdtempSync(join(tmpdir(), 'trueseal-e2e-'))
 
 async function pair(host, joiner) {
@@ -46,11 +48,13 @@ test('real relay and public SDK complete critical sync lifecycle', { timeout: 90
 
       const toB = b.waitForEvent('message', event => event.text === 'from-a')
       await a.request('send', { data: encoded('from-a') })
-      await toB
+      const first = await toB
+      ok(first.messageId.startsWith('tsm1_'))
 
       const toA = a.waitForEvent('message', event => event.text === 'from-b')
       await b.request('send', { data: encoded('from-b') })
-      await toA
+      const second = await toA
+      notStrictEqual(second.messageId, first.messageId)
 
       deepStrictEqual((await a.request('members')).length, 1)
       deepStrictEqual((await b.request('members')).length, 1)
@@ -65,6 +69,21 @@ test('real relay and public SDK complete critical sync lifecycle', { timeout: 90
       b = await client('b-restarted', bState)
       deepStrictEqual(b.ready.localNodeId, bNodeId)
       await b.waitForEvent('message', event => event.text === 'recipient-was-offline')
+    })
+
+    await t.test('duplicate envelope keeps one stable application message ID', async () => {
+      const bState = b.stateDir
+      await b.stop()
+
+      await a.request('send', { data: encoded('duplicate-delivery') })
+      await relay.stop()
+      execFileSync(duplicateInboxBinary, [relay.database], { stdio: 'inherit' })
+
+      await relay.start()
+      b = await client('b-after-duplicate', bState)
+      const first = await b.waitForEvent('message', event => event.text === 'duplicate-delivery')
+      const duplicate = await b.waitForEvent('message', event => event.text === 'duplicate-delivery')
+      deepStrictEqual(duplicate.messageId, first.messageId)
     })
 
     await t.test('sender outbox replays after relay restart', async () => {
