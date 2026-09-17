@@ -32,8 +32,8 @@ test('real relay and public SDK complete critical sync lifecycle', { timeout: 90
   const relay = new RelayProcess({ binary: relayBinary, stateDir: join(root, 'relay') })
   const clients = []
 
-  async function client(name, stateDir = join(root, name)) {
-    const value = new ClientProcess({ stateDir, relayPublicKey: relay.publicKey })
+  async function client(name, stateDir = join(root, name), clientEnv = {}) {
+    const value = new ClientProcess({ stateDir, relayPublicKey: relay.publicKey, clientEnv })
     clients.push(value)
     return value.start()
   }
@@ -77,13 +77,28 @@ test('real relay and public SDK complete critical sync lifecycle', { timeout: 90
 
       await a.request('send', { data: encoded('duplicate-delivery') })
       await relay.stop()
-      execFileSync(duplicateInboxBinary, [relay.database], { stdio: 'inherit' })
+      execFileSync(duplicateInboxBinary, ['duplicate', relay.database], { stdio: 'inherit' })
 
       await relay.start()
       b = await client('b-after-duplicate', bState)
       const first = await b.waitForEvent('message', event => event.text === 'duplicate-delivery')
       const duplicate = await b.waitForEvent('message', event => event.text === 'duplicate-delivery')
       deepStrictEqual(duplicate.messageId, first.messageId)
+    })
+
+    await t.test('acknowledged frame is not replayed after app misses its commit', async () => {
+      const bState = b.stateDir
+      await b.stop()
+
+      await a.request('send', { data: encoded('crash-before-app-commit') })
+      b = await client('b-drops-before-commit', bState, {
+        TRUESEAL_E2E_DROP_BEFORE_COMMIT_TEXT: 'crash-before-app-commit',
+      })
+      execFileSync(duplicateInboxBinary, ['wait-empty', relay.database], { stdio: 'inherit' })
+
+      await b.stop()
+      b = await client('b-after-missed-commit', bState)
+      await b.expectNoEvent('message', event => event.text === 'crash-before-app-commit')
     })
 
     await t.test('sender outbox replays after relay restart', async () => {

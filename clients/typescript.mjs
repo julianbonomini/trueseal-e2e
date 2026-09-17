@@ -23,13 +23,18 @@ const client = await TruesealSyncClient.create({
   namespace: 'e2e',
 })
 
-client.on('message', (blob, senderId, messageId) => emit({
-  event: 'message',
-  text: Buffer.from(blob).toString('utf8'),
-  data: Buffer.from(blob).toString('base64'),
-  senderId,
-  messageId,
-}))
+client.on('message', (blob, senderId, messageId) => {
+  const text = Buffer.from(blob).toString('utf8')
+  // Test-only fault injection: model a crash/failure before app state commits.
+  if (text === process.env.TRUESEAL_E2E_DROP_BEFORE_COMMIT_TEXT) return
+  emit({
+    event: 'message',
+    text,
+    data: Buffer.from(blob).toString('base64'),
+    senderId,
+    messageId,
+  })
+})
 client.on('memberRequest', (requestToken, name) => emit({ event: 'memberRequest', requestToken, name }))
 client.on('memberJoined', member => emit({ event: 'memberJoined', member }))
 client.on('memberLeft', member => emit({ event: 'memberLeft', member }))

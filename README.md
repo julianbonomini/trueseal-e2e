@@ -12,6 +12,7 @@ The first lane starts a real `trueseal-relay` process and drives isolated TypeSc
 - Bidirectional encrypted delivery.
 - Recipient process restart with deferred inbox delivery.
 - Duplicate relay delivery with one stable application Message ID.
+- The acknowledged-before-application-commit crash window.
 - Relay restart with sender outbox replay.
 - Member removal.
 - Destroy Group propagation.
@@ -34,7 +35,7 @@ Override paths with `TRUESEAL_RELAY_REPO` and `TRUESEAL_TS_REPO` when needed.
 
 ## Run
 
-Requirements: Node.js 18+, Rust, Go, and npm. The duplicate test uses a small Go fixture to copy one opaque envelope in the relay's temporary SQLite inbox; it never inspects plaintext.
+Requirements: Node.js 18+, Rust, Go, and npm. A small Go fixture copies opaque envelopes and observes inbox deletion in the relay's temporary SQLite database; it never inspects plaintext.
 
 ```bash
 npm test
