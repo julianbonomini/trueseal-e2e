@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  core:
+  core-lifecycle:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -51,3 +51,93 @@ jobs:
       - name: Run system E2E
         working-directory: trueseal-e2e
         run: npm test
+
+  rust-typescript:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout E2E harness
+        uses: actions/checkout@v7
+        with:
+          path: trueseal-e2e
+
+      - name: Checkout relay
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-relay
+          path: trueseal-relay
+
+      - name: Checkout sync core
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-sync
+          path: trueseal-sync
+
+      - name: Checkout TypeScript SDK
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-sync-ts
+          path: trueseal-sync-ts
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: trueseal-sync-ts/package-lock.json
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: trueseal-relay/go.mod
+          cache-dependency-path: trueseal-relay/go.sum
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Rust and TypeScript interop
+        working-directory: trueseal-e2e
+        run: npm run test:rust
+
+  swift-typescript:
+    runs-on: macos-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout E2E harness
+        uses: actions/checkout@v7
+        with:
+          path: trueseal-e2e
+
+      - name: Checkout relay
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-relay
+          path: trueseal-relay
+
+      - name: Checkout Swift SDK
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-sync-swift
+          path: trueseal-sync-swift
+
+      - name: Checkout TypeScript SDK
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-sync-ts
+          path: trueseal-sync-ts
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: trueseal-sync-ts/package-lock.json
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: trueseal-relay/go.mod
+          cache-dependency-path: trueseal-relay/go.sum
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Swift and TypeScript interop
+        working-directory: trueseal-e2e
+        run: npm run test:swift
