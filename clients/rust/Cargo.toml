@@ -1,0 +1,10 @@
+[package]
+name = "trueseal-e2e-rust-client"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+base64 = "0.22"
+serde_json = "1"
+trueseal-sync = { path = "../../../trueseal-sync" }

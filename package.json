@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node scripts/run.mjs"
+    "test": "node scripts/run.mjs",
+    "test:rust": "node scripts/run-interop.mjs rust",
+    "test:swift": "node scripts/run-interop.mjs swift"
   },
   "engines": {
     "node": ">=18"
