@@ -113,6 +113,12 @@ jobs:
           repository: ${{ github.repository_owner }}/trueseal-relay
           path: trueseal-relay
 
+      - name: Checkout sync core
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-sync
+          path: trueseal-sync
+
       - name: Checkout Swift SDK
         uses: actions/checkout@v7
         with:
