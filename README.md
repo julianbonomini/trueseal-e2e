@@ -65,6 +65,8 @@ TRUESEAL_E2E_SKIP_PREPARE=1 npm test
 
 ## CI and release gates
 
+The Developer Preview release gate is defined in [ADR-0001](docs/adr/0001-developer-preview-release-gate.md): a hard block against Candidate Artifacts listed in a Release Manifest. The table below describes the current lanes until that gate is implemented.
+
 | Lane | Where | What it proves | Required before |
 | --- | --- | --- | --- |
 | Core lifecycle | `trueseal-e2e` / Linux | Relay and protocol lifecycle, restart, replay, duplicate delivery, removal, and destruction | Any core, relay, or SDK release |
