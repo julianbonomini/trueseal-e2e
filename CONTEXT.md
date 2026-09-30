@@ -13,8 +13,16 @@ The exact bytes a release workflow will publish (package, framework, AAR, image)
 _Avoid_: build, pre-release
 
 **Release Manifest**:
-The list of Candidate Artifacts, each with version and checksum, that a Release Gate run tests.
+The exact set of component versions, each with checksum, that a Release Gate run tests. It lists Candidate Artifacts and may pin already-published versions of other components; only the candidates are promoted.
 _Avoid_: lockfile, pin list
+
+**Release Conductor**:
+The single workflow that cuts a coordinated release: it collects Candidate Artifacts, runs the Release Gate and promotes in dependency order.
+_Avoid_: release script, release pipeline
+
+**Release Evidence**:
+The bundle attached to every GitHub Release in a set: the Release Manifest, the gate results and the pre-promotion check output.
+_Avoid_: release report
 
 **Dev Mode**:
 An E2E run against the latest code on each repo's main branch. It gives feedback and never gates a release.
