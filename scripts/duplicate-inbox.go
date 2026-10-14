@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"os"
 	"time"
 
@@ -44,9 +45,9 @@ func main() {
 	case "duplicate":
 		duplicate(db, afterID)
 	case "wait-queued":
-		waitQueued(db, afterID)
+		waitQueued(db, afterID, waitTimeout())
 	case "wait-empty":
-		waitEmpty(db)
+		waitEmpty(db, waitTimeout())
 	case "max-id":
 		fmt.Println(maxID(db))
 	default:
@@ -120,8 +121,19 @@ func duplicate(db *sql.DB, afterID int64) {
 	}
 }
 
-func waitQueued(db *sql.DB, afterID int64) {
-	deadline := time.Now().Add(10 * time.Second)
+// waitTimeout reads DUPLICATE_INBOX_TIMEOUT_S (default 10). Loaded
+// suites (the full G1 matrix runs this helper after ~70 driver
+// processes) can outlast 10 s on an honest path. An env var, not an
+// arg, because wait-queued's optional after-id would be ambiguous.
+func waitTimeout() time.Duration {
+	if n, err := strconv.Atoi(os.Getenv("DUPLICATE_INBOX_TIMEOUT_S")); err == nil && n > 0 {
+		return time.Duration(n) * time.Second
+	}
+	return 10 * time.Second
+}
+
+func waitQueued(db *sql.DB, afterID int64, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		id, err := firstNewerThan(db, afterID)
 		if err != nil {
@@ -135,8 +147,8 @@ func waitQueued(db *sql.DB, afterID int64) {
 	fatal(fmt.Errorf("no envelope newer than row %d reached the inbox before deadline", afterID))
 }
 
-func waitEmpty(db *sql.DB) {
-	deadline := time.Now().Add(10 * time.Second)
+func waitEmpty(db *sql.DB, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		var count int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM inbox`).Scan(&count); err != nil {
@@ -147,7 +159,23 @@ func waitEmpty(db *sql.DB) {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	fatal(fmt.Errorf("inbox did not become empty before deadline"))
+	// Diagnose the stragglers: how many rows, and are they past expiry
+	// (a reaper problem) or still live (an ack problem)?
+	rows, err := db.Query(`SELECT id, expires_at FROM inbox ORDER BY id`)
+	if err != nil {
+		fatal(err)
+	}
+	defer rows.Close()
+	now := time.Now().Unix()
+	detail := ""
+	for rows.Next() {
+		var id, expiresAt int64
+		if err := rows.Scan(&id, &expiresAt); err != nil {
+			fatal(err)
+		}
+		detail += fmt.Sprintf(" [id=%d expires_at=%d (%ds from now)]", id, expiresAt, expiresAt-now)
+	}
+	fatal(fmt.Errorf("inbox did not become empty before deadline (now=%d)%s", now, detail))
 }
 
 func fatal(err error) {

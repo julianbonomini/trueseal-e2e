@@ -6,7 +6,7 @@ env:
   # XCFramework for a pinned Swift checkout without it. Must move in
   # lockstep with the trueseal-sync release train (the Release Conductor,
   # E2E-8, owns this at release time).
-  TRUESEAL_SWIFT_CORE_SHA256: 61557fb4b084087ee6fbd757647c0cef604adb45144cc7a98e03c6d5ebf6c3c8
+  TRUESEAL_SWIFT_CORE_SHA256: ea050baf939fda79da7327f2c5e6b068c4f74156655b84c9f1159e910aad66c3
   # The artifact fetch authenticates its GitHub API calls in CI — the
   # unauthenticated 60/hr budget is shared per runner IP and 403s under
   # load. Reading the PUBLIC mirror repo with the job token is allowed.

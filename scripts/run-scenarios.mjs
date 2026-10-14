@@ -53,6 +53,7 @@ const layoutJson = JSON.stringify({
   e2eRepo: layout.e2eRepo,
   tsRepo: layout.tsRepo,
   syncRepo: layout.syncRepo,
+  relayRepo: layout.relayRepo,
   kotlinRepo: layout.kotlinRepo,
   swiftClientDir: layout.swiftClientDir,
 })

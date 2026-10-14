@@ -3,9 +3,9 @@
   "comment": "Exact 40-hex commit SHAs that gate-mode runs build. Nothing floating: a value that is not a full SHA fails the run. The Release Conductor (E2E-8, #12) will regenerate this file from each Release Manifest; until then it is updated by hand as sibling mains move. Dev Mode ignores this file \u2014 testing main HEADs is its job.",
   "pins": {
     "trueseal-relay": "e0db41df183c50c2d0bfc5e1e8b6e4f51115304f",
-    "trueseal-sync": "af16c4e7dbca21e5eaad4a816c2774b9cf8e4d7f",
-    "trueseal-sync-swift": "3538cc2de143265bf8068bd94b00640f761fd144",
-    "trueseal-sync-ts": "db888167bc0c5b3b596e304974a9bbbbcba566e5",
-    "trueseal-sync-kotlin": "3b3afa2b7bdb78b62b428a1b8b7fc3a97ef4cd0b"
+    "trueseal-sync": "e9f08feefd2a893cf6b53f5364c20d9e94a64e6a",
+    "trueseal-sync-swift": "1fda1b03745e6a2fb52440d2b4b72b7703e896df",
+    "trueseal-sync-ts": "fcee8782cc87ac96c0245100919cdd0c73e6ba23",
+    "trueseal-sync-kotlin": "e82f8b6b048f4acb6a0e26132489824574d8653c"
   }
 }

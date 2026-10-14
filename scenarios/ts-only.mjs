@@ -45,8 +45,12 @@ export const TS_ONLY_SCENARIOS = {
       // DeliverAck (RELAY-1). A bare wait-empty can pass before the push
       // lands at all, racing the row's arrival past the client stop (the
       // dev/scenario-ts flake in run 38527940503).
-      execFileSync(ctx.duplicateInbox, ['wait-queued', ctx.relay.database], { stdio: 'inherit' })
-      execFileSync(ctx.duplicateInbox, ['wait-empty', ctx.relay.database], { stdio: 'inherit' })
+      // The helper's default 10 s deadline is tight at the END of the
+      // full matrix (dozens of driver processes have churned through);
+      // the ack-and-delete path is honest, just loaded.
+      const helperEnv = { ...process.env, DUPLICATE_INBOX_TIMEOUT_S: '30' }
+      execFileSync(ctx.duplicateInbox, ['wait-queued', ctx.relay.database], { stdio: 'inherit', env: helperEnv })
+      execFileSync(ctx.duplicateInbox, ['wait-empty', ctx.relay.database], { stdio: 'inherit', env: helperEnv })
 
       await b.stop()
       b = await ctx.openClient('fault-b-after', { stateDir: bState })
