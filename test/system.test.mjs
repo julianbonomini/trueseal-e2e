@@ -76,6 +76,10 @@ test('real relay and public SDK complete critical sync lifecycle', { timeout: 90
       await b.stop()
 
       await a.request('send', { data: encoded('duplicate-delivery') })
+      // send() is durable-queue semantics (ADR-0026): wait until the outbox
+      // pump's push has actually landed in the relay inbox BEFORE stopping
+      // the relay, or the duplicate below races the pump.
+      execFileSync(duplicateInboxBinary, ['wait-queued', relay.database], { stdio: 'inherit' })
       await relay.stop()
       execFileSync(duplicateInboxBinary, ['duplicate', relay.database], { stdio: 'inherit' })
 
