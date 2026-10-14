@@ -9,7 +9,9 @@
     "test:rust": "node scripts/run-interop.mjs rust --mode dev",
     "test:rust:gate": "node scripts/run-interop.mjs rust --mode gate",
     "test:swift": "node scripts/run-interop.mjs swift --mode dev",
-    "test:swift:gate": "node scripts/run-interop.mjs swift --mode gate"
+    "test:swift:gate": "node scripts/run-interop.mjs swift --mode gate",
+    "test:privacy": "node scripts/run-privacy.mjs --mode dev",
+    "test:privacy:gate": "node scripts/run-privacy.mjs --mode gate"
   },
   "engines": {
     "node": ">=18"
