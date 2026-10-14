@@ -95,3 +95,47 @@ The Developer Preview release gate is defined in [ADR-0001](docs/adr/0001-develo
 | Swift ↔ TypeScript | gate + dev | macOS | **NOT RUN** until E2E-1 rebuilds the client (tracked in gates/not-run.json) |
 
 Package versions are not treated as protocol compatibility evidence; explicit mixed-version cases belong in the protocol-versioning scenarios (E2E-2).
+
+## The G1 scenario matrix
+
+Every row of [ADR-0001](docs/adr/0001-developer-preview-release-gate.md)'s matrix has a named test here, run per SDK (TS, Swift, Kotlin-JVM) through the Scenario Driver. A row that needs a capability the driver protocol deliberately lacks is named and mapped, never silently skipped.
+
+| ADR-0001 row | Scenario (file · test) | ADR |
+| --- | --- | --- |
+| Pairing + explicit admission, happy path | lifecycle.mjs · "explicit pairing and bidirectional delivery"; pairing.mjs · "explicit admission completes the happy path" | ADR-0023 |
+| Pairing: bad token | pairing.mjs · "a malformed pairing token is refused typed" | ADR-0023 |
+| Pairing: cancel | pairing.mjs · "cancelJoin returns a pending join to notJoined" | ADR-0023/0028 |
+| Pairing: reject (no decline message) | pairing.mjs · "reject: a window closed without accept never admits" | ADR-0023 |
+| Pairing: restart mid-pairing (joiner) | pairing.mjs · "restart mid-pairing: the joiner resumes from its persisted Pending Join" — doubles as the G6 Pending-Join fixture row | ADR-0023/0032 |
+| Pairing: restart mid-pairing (host) | pairing.mjs · "restart mid-pairing: a host restart spends the in-memory window" | ADR-0023 |
+| Send and receive | lifecycle.mjs · "explicit pairing and bidirectional delivery" (both directions) | ADR-0026 |
+| Offline sender outbox replay | lifecycle.mjs · "sender outbox replays after relay restart" | ADR-0026 |
+| Outbox replay incl. a sender process restart + ordering | delivery.mjs · "outbox replay preserves per-sender order across a sender process restart" | ADR-0026 |
+| Per-sender ordering under interleave | delivery.mjs · "per-sender order holds when two senders interleave" | ADR-0026 |
+| Offline recipient inbox | lifecycle.mjs · "offline recipient drains durable relay inbox after process restart" | ADR-0026 |
+| Duplicates and idempotency | lifecycle.mjs · "duplicate envelope is delivered once — the library dedups" | ADR-0031 |
+| Relay restart | lifecycle.mjs · "sender outbox replays after relay restart" (SIGTERM mid-queue; unacked rows survive — C13) | relay ADR-0012 |
+| Client restart | lifecycle.mjs · "offline recipient drains durable relay inbox after process restart"; delivery.mjs sender-restart row | ADR-0026 |
+| Crash mid-handler redelivers… acked | ts-only.mjs · "acknowledged frame is not replayed after the app misses its commit" (TS-driver fault hook; NOT RUN on Swift/Kotlin — a generic block-the-handler hook would be a Protocol v2 extension, see the issue) | ADR-0026 |
+| Membership addition | membership.mjs · "a third device joins an existing group and every member sees everyone" | ADR-0027 |
+| Membership removal + silence | lifecycle.mjs · "member removal reaches the removed device"; membership.mjs · "silence after removal" (both directions) | ADR-0027 |
+| Concurrent membership updates | membership.mjs · "concurrent admissions by two members converge on one membership" | ADR-0027 |
+| Destroy Group: every device destroyed | lifecycle.mjs · "Destroy Group reaches every current member"; destroy.mjs · "an offline member wipes after it reconnects" | ADR-0029 |
+| Destroy: fresh identity, nothing addressed to old keys | destroy.mjs · "destroy rotates the identity; old member ids are dead" | ADR-0029 |
+| Destroy: stolen device not admitted | destroy.mjs · "re-pairing after destroy: a stolen device is not admitted without acceptance" | ADR-0029 |
+| Destroy: offline past TTL misses it (limitation) | destroy.mjs · "a device offline past the TTL misses the Destroy" | ADR-0029/0034 |
+| TTL expiry boundaries | ttl.mjs · "TTL boundary: delivered just under, silently gone just past" — the relay-side boundary. The client-side 30d Sync expiry / 60d replay window boundaries are unit-tested in the core (B10's sealed-envelope suite: 59d/61d) — not real-time scenario-testable | ADR-0026/0031/0034 |
+| Version compatibility: transport refusal | versions.mjs · "an unsupported Transport Version surfaces typed, queues nothing away, and recovers" | ADR-0022 |
+| Version compatibility: E2E versions (newer held / older dropped / malformed) + malformed/replayed/unauthorized frames | **Adversary Client rows — E2E-5 (#9)**. Protocol v1 maps 1:1 onto the public API and must not grow envelope crafting; the Rust client base becomes the Adversary Client per ADR-0001 | ADR-0022/0026/0031 |
+| Size limit | limits.mjs · "the Protocol Size Limit: 61,440 accepted, 61,441 refused typed"; "an operator-lowered relay limit surfaces sendFailed(tooLarge)" | ADR-0025 |
+| Relay baseline: idle timeout + heartbeat | limits.mjs · "idle timeout closes a heartbeat-less session; the client reconnects" + "the 25 s heartbeat keeps a session alive past one interval" | relay ADR-0012 |
+| Relay baseline: inbox full / rate limited | limits.mjs · "inbox full: typed temporary refusal, the pump retries and recovers"; "rate limited: …with recovery in order" | relay ADR-0012 |
+| Relay baseline: Receive Session cap | limits.mjs · "the Receive Session cap per device key refuses a second concurrent session" | relay ADR-0012 |
+| Relay baseline: graceful shutdown, no loss | lifecycle relay-restart rows (SIGTERM = the C13 drain path) + the ts-only acked-row-deleted assertion | relay ADR-0012 |
+| Relay baseline: normal-mode log privacy | test/privacy.test.mjs (E2E-7, G7) | relay ADR-0012 |
+| Upgrade fixtures (G6): pure-storage states | upgrades.mjs · "the member-with-outbox fixture opens and its queue drains" + "the dedup-in-use fixture opens clean" (committed testdata, emitted by the pinned core's `trueseal-cli emit-fixture`) | ADR-0032 |
+| Upgrade fixtures (G6): state-machine states | pairing.mjs Pending-Join resume; upgrades.mjs · "a Leaving state persisted at crash resumes and completes" + "a Destroying state persisted at crash resumes and completes" | ADR-0032 |
+| Upgrade fixtures (G6): storeTooNew | upgrades.mjs · "a newer store is refused typed and left byte-unchanged" | ADR-0032 |
+| Upgrade fixtures (G6): relay store | upgrades.mjs · "the relay opens its committed v1 store fixture and serves traffic" | relay ADR-0013 |
+| Upgrade fixtures (G6): killed migration recovers | **No migration chains exist at Store Version 1** (the first preview release) — nothing to kill. The machinery is unit-tested in both stores (sync B11's killed-migration retry; relay C6's whole-chain rollback). The first release with a chain MUST add the scenario row here | ADR-0032/0034, relay ADR-0013 |
+| The outbox upgrade transition | ADR-0034 replaced `undeliverableAfterUpgrade` with re-sealing; the re-seal machinery is unit-tested in the core (B11's re-seal suite incl. fan-out duplicates). Scenario-level coverage arrives with the first End-to-End Version bump | ADR-0032/0034 |
