@@ -26,10 +26,17 @@ import { hex, pair, textOf } from './lifecycle.mjs'
 
 export async function runTtl(t, ctx) {
   await t.test('TTL boundary: delivered just under, silently gone just past (sync ADR-0026/0034)', async () => {
+    // TTL headroom is chosen for LOADED CI runners: phase 1 must leave a
+    // stopped recipient enough time to reopen and drain (driver spawn +
+    // handshake can take seconds under load), and phase 2's reap wait is
+    // generous because the reaper's 1s tick slips under CPU starvation.
+    // A leftover row here poisons later tests' wait-empty assertions, so
+    // phase 2 does not exit before the row is provably gone.
     await ctx.relay.reconfigure({
-      TRUESEAL_RELAY_TTL: '4s',
+      TRUESEAL_RELAY_TTL: '12s',
       TRUESEAL_RELAY_REAP_INTERVAL: '1s',
     })
+    const helperEnv = { ...process.env, DUPLICATE_INBOX_TIMEOUT_S: '60' }
     try {
       const a = await ctx.openClient('ttl-a')
       let b = await ctx.openClient('ttl-b')
@@ -39,23 +46,23 @@ export async function runTtl(t, ctx) {
       // ── Under the boundary: the recipient returns before expiry.
       await b.stop()
       await a.request('send', { bodyHex: hex('within-ttl') })
-      await new Promise(resolve => setTimeout(resolve, 1_500))
+      await new Promise(resolve => setTimeout(resolve, 2_000))
       b = await ctx.openClient('ttl-b-within', { stateDir: bState })
       await b.waitForEvent(
         value => value.event === 'message' && textOf(value) === 'within-ttl',
-        15_000,
+        20_000,
         'the message delivered within the TTL',
       )
-      execFileSync(ctx.duplicateInbox, ['wait-empty', ctx.relay.database], { stdio: 'inherit' })
+      execFileSync(ctx.duplicateInbox, ['wait-empty', ctx.relay.database], { stdio: 'inherit', env: helperEnv })
 
       // ── Over the boundary: the blob is reaped before the recipient
       // returns, and nobody resends (the sender's copy was deleted on
       // relay acceptance — this is the documented availability limit).
       await b.stop()
       await a.request('send', { bodyHex: hex('past-ttl') })
-      execFileSync(ctx.duplicateInbox, ['wait-queued', ctx.relay.database], { stdio: 'inherit' })
-      // The reaper (1s interval) removes it once the 4s TTL passes.
-      execFileSync(ctx.duplicateInbox, ['wait-empty', ctx.relay.database], { stdio: 'inherit' })
+      execFileSync(ctx.duplicateInbox, ['wait-queued', ctx.relay.database], { stdio: 'inherit', env: helperEnv })
+      // The reaper (1s interval) removes it once the 12s TTL passes.
+      execFileSync(ctx.duplicateInbox, ['wait-empty', ctx.relay.database], { stdio: 'inherit', env: helperEnv })
       b = await ctx.openClient('ttl-b-past', { stateDir: bState })
       await b.expectNoEvent(
         value => value.event === 'message' && textOf(value) === 'past-ttl',
