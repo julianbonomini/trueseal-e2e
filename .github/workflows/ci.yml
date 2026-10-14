@@ -1,5 +1,13 @@
 name: E2E
 
+env:
+  # The exact sha256 of the pinned core's Swift artifact (the core
+  # release's published checksum — G8). The harness refuses to fetch the
+  # XCFramework for a pinned Swift checkout without it. Must move in
+  # lockstep with the trueseal-sync release train (the Release Conductor,
+  # E2E-8, owns this at release time).
+  TRUESEAL_SWIFT_CORE_SHA256: 61557fb4b084087ee6fbd757647c0cef604adb45144cc7a98e03c6d5ebf6c3c8
+
 on:
   push:
     branches: [main]

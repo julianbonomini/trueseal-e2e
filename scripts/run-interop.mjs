@@ -10,6 +10,7 @@ import {
   parseMode,
   prepareWorkspace,
 } from '../lib/workspace.mjs'
+import { fetchSwiftCoreArtifact } from '../lib/sdk-drivers.mjs'
 
 const adapter = process.argv[2]
 if (!['rust', 'swift'].includes(adapter)) {
@@ -71,6 +72,9 @@ if (!adapterBin && adapter === 'rust') {
 }
 
 if (!adapterBin && adapter === 'swift') {
+  // A pinned swift checkout's binaryTarget needs the core artifact fetched
+  // (the XCFramework is not in git — SWIFT-2's local path on main).
+  fetchSwiftCoreArtifact(layout.swiftRepo, run)
   const scratch = join(artifacts, 'swift')
   adapterBuilt = tryRun('swift', [
     'build', '--package-path', layout.swiftClientDir,
