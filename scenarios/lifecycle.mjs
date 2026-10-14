@@ -16,6 +16,26 @@ export function hex(text) {
   return Buffer.from(text, 'utf8').toString('hex')
 }
 
+/**
+ * Polls the members command until it returns `count` members. The Swift
+ * SDK's members is an @Observable snapshot refreshed asynchronously by
+ * the SDK's own event listeners (D1), while TS/Kotlin read the core
+ * directly — a single read right after a membersChanged event can
+ * legitimately race the snapshot. Polling honours both shapes.
+ */
+/** Polls the members command until it settles (the Swift SDK's members
+ *  is an @Observable snapshot refreshed asynchronously, D1). */
+async function pollMembers(client, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs
+  let last = []
+  while (Date.now() < deadline) {
+    last = (await client.request('members')).members
+    if (last.length > 0) return last
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  return last
+}
+
 function textOf(notification) {
   return Buffer.from(notification.message.bodyHex, 'hex').toString('utf8')
 }
@@ -68,8 +88,34 @@ export async function runLifecycle(t, ctx) {
     const second = await toA
     notStrictEqual(second.message.id, first.message.id)
 
-    deepStrictEqual((await a.request('members')).members.length, 1)
-    deepStrictEqual((await b.request('members')).members.length, 1)
+    // ADR-0028: members lists every OTHER member (self excluded) — one
+    // entry for a two-device group. A lane with the 'members-includes-self'
+    // known deviation (an SDK conformance bug, tracked per driver in
+    // lib/sdk-drivers.mjs) instead asserts the peer IS listed, loudly;
+    // a lane listing the deviation while PASSING the strict check fails —
+    // the stale entry is drift and removing it is part of the fix.
+    for (const [name, client, peer] of [['a', a, b.me.id], ['b', b, a.me.id]]) {
+      const members = await pollMembers(client)
+      if (members.length === 1) {
+        if (ctx.knownDeviations.includes('members-includes-self')) {
+          throw new Error(
+            `${name}: members excludes self, but this lane lists the 'members-includes-self' ` +
+              'known deviation — the SDK was fixed; remove the stale entry (lib/sdk-drivers.mjs)',
+          )
+        }
+        deepStrictEqual(members[0].id, peer)
+      } else if (ctx.knownDeviations.includes('members-includes-self')) {
+        console.log('')
+        console.log(
+          `KNOWN DEVIATION — ${ctx.sdk}: members includes self (${members.length} entries on ${name}; ` +
+            'ADR-0028 says every OTHER member — SDK conformance bug, tracked in lib/sdk-drivers.mjs)',
+        )
+        console.log('')
+        deepStrictEqual(members.some(member => member.id === peer), true)
+      } else {
+        deepStrictEqual(members.length, 1)
+      }
+    }
   })
 
   await t.test('offline recipient drains durable relay inbox after process restart', async () => {

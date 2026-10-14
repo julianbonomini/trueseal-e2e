@@ -1,0 +1,4 @@
+module trueseal_syncFFI {
+    header "trueseal_syncFFI.h"
+    export *
+}

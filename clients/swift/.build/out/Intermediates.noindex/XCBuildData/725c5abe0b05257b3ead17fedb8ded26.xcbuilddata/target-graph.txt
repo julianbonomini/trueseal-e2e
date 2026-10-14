@@ -1,0 +1,11 @@
+Target dependency graph (5 targets)
+Target 'AllExcludingTests' in project 'Aggregate'
+➜ Explicit dependency on target 'trueseal-e2e-swift-client-product' in project 'trueseal-e2e-swift-client'
+Target 'trueseal-e2e-swift-client-product' in project 'trueseal-e2e-swift-client'
+➜ Explicit dependency on target 'TruesealSync-product' in project 'TruesealSync'
+Target 'TruesealSync-product' in project 'TruesealSync'
+➜ Explicit dependency on target 'TruesealSync' in project 'TruesealSync'
+➜ Explicit dependency on target 'TruesealSyncBindings' in project 'TruesealSync'
+Target 'TruesealSync' in project 'TruesealSync'
+➜ Explicit dependency on target 'TruesealSyncBindings' in project 'TruesealSync'
+Target 'TruesealSyncBindings' in project 'TruesealSync' (no dependencies)

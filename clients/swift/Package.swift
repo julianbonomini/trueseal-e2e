@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "trueseal-e2e-swift-client",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],
     dependencies: [
         .package(path: "../../../trueseal-sync-swift"),
     ],

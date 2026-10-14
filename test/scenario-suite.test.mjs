@@ -25,6 +25,8 @@ test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { t
   const ctx = {
     relay,
     duplicateInbox,
+    knownDeviations: driver.deviations ?? [],
+    sdk: sdkName,
     async openClient(name, { stateDir = join(root, name), extraEnv = {} } = {}) {
       // The core opens the DB file but does not create its parent
       // directory — the harness owns the state dirs.

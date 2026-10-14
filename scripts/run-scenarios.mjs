@@ -67,5 +67,8 @@ run(
     TRUESEAL_DUPLICATE_INBOX_BIN: resolve(duplicateInboxBin),
     TRUESEAL_TS_REPO: layout.tsRepo,
     TRUESEAL_E2E_LAYOUT: layoutJson,
+    ...(process.env.TRUESEAL_SWIFT_DRIVER_BIN
+      ? { TRUESEAL_SWIFT_DRIVER_BIN: process.env.TRUESEAL_SWIFT_DRIVER_BIN }
+      : {}),
   },
 )
