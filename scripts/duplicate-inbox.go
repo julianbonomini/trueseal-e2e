@@ -159,7 +159,23 @@ func waitEmpty(db *sql.DB, timeout time.Duration) {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	fatal(fmt.Errorf("inbox did not become empty before deadline"))
+	// Diagnose the stragglers: how many rows, and are they past expiry
+	// (a reaper problem) or still live (an ack problem)?
+	rows, err := db.Query(`SELECT id, expires_at FROM inbox ORDER BY id`)
+	if err != nil {
+		fatal(err)
+	}
+	defer rows.Close()
+	now := time.Now().Unix()
+	detail := ""
+	for rows.Next() {
+		var id, expiresAt int64
+		if err := rows.Scan(&id, &expiresAt); err != nil {
+			fatal(err)
+		}
+		detail += fmt.Sprintf(" [id=%d expires_at=%d (%ds from now)]", id, expiresAt, expiresAt-now)
+	}
+	fatal(fmt.Errorf("inbox did not become empty before deadline (now=%d)%s", now, detail))
 }
 
 func fatal(err error) {
