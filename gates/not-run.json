@@ -1,14 +1,10 @@
 {
   "$schema": "lanes allowed to report not-run (visible-skip discipline, e2e ADR-0001)",
-  "comment": "A lane listed here may report 'not run' without failing the run — but the report is LOUD and names its tracking issue. A lane that BUILDS while listed here fails the run: a stale entry is drift, and removing it is part of the tracking issue. E2E-1 (#5) rebuilds both clients below as Scenario Drivers and must empty this file.",
+  "comment": "A lane listed here may report 'not run' without failing the run — but the report is LOUD and names its tracking issue. A lane that BUILDS while listed here fails the run: a stale entry is drift, and removing it is part of the tracking issue. E2E-1 (#5) rebuilt the Swift client as a Protocol v1 Scenario Driver and emptied its entry; the Rust client is NOT an SDK driver — per e2e ADR-0001 'SDK matrix' and issue #5 it becomes the Adversary Client base, so its repair moved to E2E-5 (#9).",
   "lanes": {
     "rust-interop": {
-      "issue": "https://github.com/julianbonomini/trueseal-e2e/issues/5",
-      "reason": "clients/rust uses the pre-SYNC-15 core FFI (TruesealFfiSession + callback traits), which the canonical core (trueseal-sync#107) removed. E2E-1 rebuilds this lane as the Rust Scenario Driver — the future Adversary Client base (e2e ADR-0001)."
-    },
-    "swift-interop": {
-      "issue": "https://github.com/julianbonomini/trueseal-e2e/issues/5",
-      "reason": "clients/swift uses TruesealSyncClient, which SDK-1 (trueseal-sync-swift#2) replaced with the canonical TrueSeal API. E2E-1 rebuilds this lane as the Swift Scenario Driver."
+      "issue": "https://github.com/julianbonomini/trueseal-e2e/issues/9",
+      "reason": "clients/rust uses the pre-SYNC-15 core FFI (TruesealFfiSession + callback traits), which the canonical core (trueseal-sync#107) removed. Per e2e ADR-0001 'SDK matrix' the Rust client is not part of the SDK matrix — it becomes the Adversary Client base, rebuilt in E2E-5 (#9)."
     }
   }
 }

@@ -115,4 +115,11 @@ run(process.execPath, ['--test', '--test-force-exit', join(repo, 'test', 'intero
   TRUESEAL_TS_REPO: layout.tsRepo,
   TRUESEAL_E2E_ADAPTER_NAME: adapter,
   TRUESEAL_E2E_ADAPTER_BIN: resolve(adapterBin),
+  TRUESEAL_E2E_LAYOUT: JSON.stringify({
+    e2eRepo: layout.e2eRepo,
+    tsRepo: layout.tsRepo,
+    syncRepo: layout.syncRepo,
+    kotlinRepo: layout.kotlinRepo,
+    swiftClientDir: layout.swiftClientDir,
+  }),
 })
