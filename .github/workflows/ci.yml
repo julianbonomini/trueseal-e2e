@@ -49,6 +49,13 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # The duplicate-inbox helper's regression tests (E3b: the watermark
+      # discipline that keeps at-least-once inbox rows from racing the
+      # system suite). Its module is self-contained (scripts/go.mod).
+      - name: Test duplicate-inbox helper
+        working-directory: scripts
+        run: go test ./...
+
       - name: Run ${{ matrix.lane }} (gate mode)
         run: ${{ matrix.command }}
 

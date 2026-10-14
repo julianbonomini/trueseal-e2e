@@ -31,15 +31,15 @@ function run(command, args, cwd, extraEnv = {}) {
 if (process.env.TRUESEAL_E2E_SKIP_PREPARE !== '1') {
   buildTypeScriptSdk(layout.tsRepo, run)
   buildRelay(layout.relayRepo, relayBin, run)
-  // duplicate-inbox.go resolves modernc.org/sqlite through the relay's go.mod,
-  // so it builds with the relay checkout as its working directory.
-  run('go', ['build', '-o', duplicateInboxBin, join(layout.e2eRepo, 'scripts', 'duplicate-inbox.go')], layout.relayRepo)
+  // duplicate-inbox has its own module (scripts/go.mod) so its regression
+  // tests run without a relay checkout (E3b).
+  run('go', ['build', '-o', duplicateInboxBin, '.'], join(layout.e2eRepo, 'scripts'))
 } else if (!process.env.TRUESEAL_RELAY_BIN) {
   buildRelay(layout.relayRepo, relayBin, run)
 }
 
 if (process.env.TRUESEAL_E2E_SKIP_PREPARE === '1' && !process.env.TRUESEAL_DUPLICATE_INBOX_BIN) {
-  run('go', ['build', '-o', duplicateInboxBin, join(layout.e2eRepo, 'scripts', 'duplicate-inbox.go')], layout.relayRepo)
+  run('go', ['build', '-o', duplicateInboxBin, '.'], join(layout.e2eRepo, 'scripts'))
 }
 
 const effectiveRelayBin = resolve(process.env.TRUESEAL_RELAY_BIN ?? relayBin)

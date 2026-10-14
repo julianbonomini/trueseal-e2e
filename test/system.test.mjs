@@ -69,21 +69,35 @@ test('real relay and public SDK complete critical sync lifecycle', { timeout: 90
       b = await client('b-restarted', bState)
       deepStrictEqual(b.ready.localNodeId, bNodeId)
       await b.waitForEvent('message', event => event.text === 'recipient-was-offline')
+      // The ack goes out after the handler (ADR-0026) and the relay deletes
+      // the row on ack (RELAY-1). Assert the full round-trip — and leave no
+      // un-acked row behind for later subtests to trip over (E3b: a leftover
+      // here raced the duplicate subtest's "any row" wait into finding two).
+      execFileSync(duplicateInboxBinary, ['wait-empty', relay.database], { stdio: 'inherit' })
     })
 
     await t.test('duplicate envelope is delivered once — the library dedups (ADR-0031)', async () => {
       const bState = b.stateDir
       await b.stop()
 
+      // Watermark the inbox BEFORE sending (E3b): the inbox is at-least-once
+      // — an un-acked leftover or a legitimate pump retry can add rows — so
+      // only envelopes newer than this watermark are this send's.
+      const watermark = execFileSync(duplicateInboxBinary, ['max-id', relay.database])
+        .toString().trim()
       await a.request('send', { data: encoded('duplicate-delivery') })
       // send() is durable-queue semantics (ADR-0026): wait until the outbox
       // pump's push has actually landed in the relay inbox BEFORE stopping
       // the relay, or the duplicate below races the pump.
-      execFileSync(duplicateInboxBinary, ['wait-queued', relay.database], { stdio: 'inherit' })
+      execFileSync(duplicateInboxBinary, ['wait-queued', relay.database, watermark], { stdio: 'inherit' })
+      // try/finally: a failing duplicate step must not leave the relay
+      // stopped and cascade into every later subtest (E3b).
       await relay.stop()
-      execFileSync(duplicateInboxBinary, ['duplicate', relay.database], { stdio: 'inherit' })
-
-      await relay.start()
+      try {
+        execFileSync(duplicateInboxBinary, ['duplicate', relay.database, watermark], { stdio: 'inherit' })
+      } finally {
+        await relay.start()
+      }
       b = await client('b-after-duplicate', bState)
       // The relay delivers both copies; the library's Replay Window (ADR-0031,
       // trueseal-sync#104) dedups by Message ID, so the handler sees exactly
