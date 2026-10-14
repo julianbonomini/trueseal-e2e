@@ -84,13 +84,29 @@ test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { t
   // the full matrix spawns ~70 driver processes against one relay, and
   // leaving them all alive starves the later modules (the ts-only flake
   // in the first full run).
+  //
+  // DRAIN BEFORE STOP: a message's notification is emitted INSIDE the
+  // driver's handler, so the suite proceeds while the core's DeliverAck
+  // is still in flight — a client stopped in that window strands its row
+  // in the inbox with a 30-day TTL, poisoning every later wait-empty
+  // (the gate-leg TTL/ts-only failures, run 38540148152: straggler rows
+  // with expires_at = now+30d). Delivered rows are deleted on ack, so
+  // wait for the inbox to drain while the clients are still alive. A
+  // row that legitimately cannot drain fails HERE, loudly, with the
+  // helper's straggler diagnostics — not in an innocent downstream test.
   const runModule = async module => {
     const before = clients.length
     try {
       await module(t, ctx)
     } finally {
       const owned = clients.splice(before)
-      await Promise.allSettled(owned.map(client => client.stop()))
+      try {
+        execFileSync(duplicateInbox, ['wait-empty', relay.database], {
+          env: { ...process.env, DUPLICATE_INBOX_TIMEOUT_S: '30' },
+        })
+      } finally {
+        await Promise.allSettled(owned.map(client => client.stop()))
+      }
     }
   }
 
