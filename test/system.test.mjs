@@ -71,7 +71,7 @@ test('real relay and public SDK complete critical sync lifecycle', { timeout: 90
       await b.waitForEvent('message', event => event.text === 'recipient-was-offline')
     })
 
-    await t.test('duplicate envelope keeps one stable application message ID', async () => {
+    await t.test('duplicate envelope is delivered once — the library dedups (ADR-0031)', async () => {
       const bState = b.stateDir
       await b.stop()
 
@@ -81,9 +81,13 @@ test('real relay and public SDK complete critical sync lifecycle', { timeout: 90
 
       await relay.start()
       b = await client('b-after-duplicate', bState)
+      // The relay delivers both copies; the library's Replay Window (ADR-0031,
+      // trueseal-sync#104) dedups by Message ID, so the handler sees exactly
+      // one. e2e#7: this expectation replaced the pre-ADR-0031 "two
+      // deliveries with one stable Message ID" assertion.
       const first = await b.waitForEvent('message', event => event.text === 'duplicate-delivery')
-      const duplicate = await b.waitForEvent('message', event => event.text === 'duplicate-delivery')
-      deepStrictEqual(duplicate.messageId, first.messageId)
+      ok(first.messageId)
+      await b.expectNoEvent('message', event => event.text === 'duplicate-delivery', 5_000)
     })
 
     await t.test('acknowledged frame is not replayed after app misses its commit', async () => {
