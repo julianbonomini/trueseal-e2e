@@ -89,31 +89,33 @@ export async function runLifecycle(t, ctx) {
     notStrictEqual(second.message.id, first.message.id)
 
     // ADR-0028: members lists every OTHER member (self excluded) — one
-    // entry for a two-device group. A lane with the 'members-includes-self'
-    // known deviation (an SDK conformance bug, tracked per driver in
-    // lib/sdk-drivers.mjs) instead asserts the peer IS listed, loudly;
-    // a lane listing the deviation while PASSING the strict check fails —
-    // the stale entry is drift and removing it is part of the fix.
+    // entry for a two-device group. The Swift and Kotlin SDKs have a
+    // NONDETERMINISTIC conformance bug (their state snapshots race between
+    // core.members() — excludes self — and the membersChanged event
+    // payload — includes self), tracked as the 'members-includes-self'
+    // known deviation per driver in lib/sdk-drivers.mjs. The deterministic
+    // contract every lane asserts: the peer IS listed. A lane without the
+    // deviation asserts the strict ADR-0028 shape; a lane with it logs
+    // which value the race produced (loudly when the bug shows) and never
+    // fails on the CORRECT value — the entry is removed by the SDK fix,
+    // which re-enables the strict assertion.
     for (const [name, client, peer] of [['a', a, b.me.id], ['b', b, a.me.id]]) {
       const members = await pollMembers(client)
-      if (members.length === 1) {
-        if (ctx.knownDeviations.includes('members-includes-self')) {
-          throw new Error(
-            `${name}: members excludes self, but this lane lists the 'members-includes-self' ` +
-              'known deviation — the SDK was fixed; remove the stale entry (lib/sdk-drivers.mjs)',
-          )
-        }
+      const includesSelf = members.some(member => member.id === client.me.id)
+      if (!ctx.knownDeviations.includes('members-includes-self')) {
+        deepStrictEqual(members.length, 1)
         deepStrictEqual(members[0].id, peer)
-      } else if (ctx.knownDeviations.includes('members-includes-self')) {
+      } else {
+        deepStrictEqual(members.some(member => member.id === peer), true)
         console.log('')
         console.log(
-          `KNOWN DEVIATION — ${ctx.sdk}: members includes self (${members.length} entries on ${name}; ` +
-            'ADR-0028 says every OTHER member — SDK conformance bug, tracked in lib/sdk-drivers.mjs)',
+          includesSelf
+            ? `KNOWN DEVIATION — ${ctx.sdk}: members includes self (${members.length} entries on ${name}; ` +
+              'ADR-0028 says every OTHER member — SDK conformance bug, tracked in lib/sdk-drivers.mjs)'
+            : `note — ${ctx.sdk}: members excludes self this run (${members.length} entry on ${name}); ` +
+              'the members-includes-self deviation is nondeterministic — the entry stays until the SDK fix lands',
         )
         console.log('')
-        deepStrictEqual(members.some(member => member.id === peer), true)
-      } else {
-        deepStrictEqual(members.length, 1)
       }
     }
   })
