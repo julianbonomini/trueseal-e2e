@@ -42,6 +42,17 @@ test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { t
     get relayAddress() {
       return relayAddress(relay)
     },
+    /** Waits for the main relay's inbox to drain. Delivered rows are
+     *  deleted on ack; an event's notification is emitted INSIDE the
+     *  driver's handler, so the ack trails the event — any test that
+     *  stops a client right after receiving must drain FIRST, or the
+     *  stop strands the row (30-day TTL) and poisons later wait-empty
+     *  assertions (gate/scenario-kotlin, run 38542388595). */
+    drain() {
+      execFileSync(duplicateInbox, ['wait-empty', relay.database], {
+        env: { ...process.env, DUPLICATE_INBOX_TIMEOUT_S: '30' },
+      })
+    },
     /** A second relay process on the same ports (use only while the main
      *  relay is stopped) — e.g. the G6 committed store fixture. */
     spawnRelay(stateDir, extraEnv = {}) {
