@@ -36,9 +36,9 @@ function run(command, args, cwd, extraEnv = {}) {
 
 buildTypeScriptSdk(layout.tsRepo, run)
 buildRelay(layout.relayRepo, relayBin, run)
-// duplicate-inbox.go resolves modernc.org/sqlite through the relay's go.mod,
-// so it builds with the relay checkout as its working directory.
-run('go', ['build', '-o', duplicateInboxBin, join(layout.e2eRepo, 'scripts', 'duplicate-inbox.go')], layout.relayRepo)
+// duplicate-inbox has its own module (scripts/go.mod) so its regression
+// tests run without a relay checkout (E3b).
+run('go', ['build', '-o', duplicateInboxBin, '.'], join(layout.e2eRepo, 'scripts'))
 
 let pins = {}
 if (mode === 'gate') {
