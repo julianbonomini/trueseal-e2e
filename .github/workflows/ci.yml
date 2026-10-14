@@ -25,6 +25,9 @@ jobs:
           - lane: system
             os: ubuntu-latest
             command: node scripts/run.mjs --mode gate
+          - lane: relay-privacy
+            os: ubuntu-latest
+            command: node scripts/run-privacy.mjs --mode gate
           - lane: rust-typescript
             os: ubuntu-latest
             command: node scripts/run-interop.mjs rust --mode gate
@@ -49,6 +52,17 @@ jobs:
       - name: Run ${{ matrix.lane }} (gate mode)
         run: ${{ matrix.command }}
 
+      # G7 Release Evidence (E2E-7 completion criterion: "Output is included
+      # in Release Evidence"). A lane that can't run counts as a failure, so
+      # missing evidence is an error, not a skip.
+      - name: Upload G7 privacy evidence
+        if: matrix.lane == 'relay-privacy'
+        uses: actions/upload-artifact@v7
+        with:
+          name: g7-privacy-evidence
+          path: gates/evidence/g7-privacy-*.json
+          if-no-files-found: error
+
   dev:
     # DEV MODE: builds sibling main HEADs for early feedback. It runs on e2e
     # changes and nightly, is labeled non-gating, and never blocks a release
@@ -64,6 +78,10 @@ jobs:
           - lane: system
             os: ubuntu-latest
             command: node scripts/run.mjs --mode dev
+            needs_ts: true
+          - lane: relay-privacy
+            os: ubuntu-latest
+            command: node scripts/run-privacy.mjs --mode dev
             needs_ts: true
           - lane: rust-typescript
             os: ubuntu-latest
