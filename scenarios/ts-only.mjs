@@ -39,7 +39,13 @@ export const TS_ONLY_SCENARIOS = {
         extraEnv: { TRUESEAL_E2E_DROP_BEFORE_COMMIT_TEXT: 'crash-before-app-commit' },
       })
       // The handler returns normally without the app committing: the
-      // library acks (ADR-0026) and the relay deletes the row.
+      // library acks (ADR-0026) and the relay deletes the row. Prove the
+      // full cycle deterministically: the row LANDS (wait-queued) and then
+      // DISAPPEARS (wait-empty) — the only way out of an inbox is a
+      // DeliverAck (RELAY-1). A bare wait-empty can pass before the push
+      // lands at all, racing the row's arrival past the client stop (the
+      // dev/scenario-ts flake in run 38527940503).
+      execFileSync(ctx.duplicateInbox, ['wait-queued', ctx.relay.database], { stdio: 'inherit' })
       execFileSync(ctx.duplicateInbox, ['wait-empty', ctx.relay.database], { stdio: 'inherit' })
 
       await b.stop()
