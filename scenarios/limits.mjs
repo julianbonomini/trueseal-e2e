@@ -125,11 +125,19 @@ export async function runLimits(t, ctx) {
       // session slot: the relay refuses by close, so the second client
       // observes a disconnect (its reconnect loop keeps retrying).
       const second = await ctx.openClient('cap-second', { stateDir })
-      await second.waitForEvent(
-        value => value.kind === 'connectionChanged' && value.connection.state !== 'connected',
-        20_000,
-        'a disconnect on the session the cap refuses',
-      )
+      // The cap-close can land before a scenario-registered waiter sees
+      // it (buffered events drain at listenEvents during open), and the
+      // reconnect backoff then spaces further attempts minutes apart —
+      // so POLL the connection state: between redials the refused client
+      // sits disconnected.
+      const deadline = Date.now() + 25_000
+      let refused = false
+      while (Date.now() < deadline && !refused) {
+        const { connection } = await second.request('connection')
+        refused = connection.state !== 'connected'
+        if (!refused) await new Promise(resolve => setTimeout(resolve, 250))
+      }
+      if (!refused) throw new Error('the second session was never refused by the cap')
       await second.stop()
       // With the competitor gone, the first session is stable.
       await pollConnected(first, 15_000)

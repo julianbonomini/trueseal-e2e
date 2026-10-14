@@ -80,20 +80,34 @@ test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { t
     },
   }
 
+  // Each scenario module's clients are stopped when the module finishes:
+  // the full matrix spawns ~70 driver processes against one relay, and
+  // leaving them all alive starves the later modules (the ts-only flake
+  // in the first full run).
+  const runModule = async module => {
+    const before = clients.length
+    try {
+      await module(t, ctx)
+    } finally {
+      const owned = clients.splice(before)
+      await Promise.allSettled(owned.map(client => client.stop()))
+    }
+  }
+
   try {
     await relay.start()
-    await runLifecycle(t, ctx)
-    await runPairing(t, ctx)
-    await runDelivery(t, ctx)
-    await runMembership(t, ctx)
-    await runDestroy(t, ctx)
-    await runTtl(t, ctx)
-    await runLimits(t, ctx)
-    await runVersions(t, ctx)
-    await runUpgrades(t, ctx)
+    await runModule(runLifecycle)
+    await runModule(runPairing)
+    await runModule(runDelivery)
+    await runModule(runMembership)
+    await runModule(runDestroy)
+    await runModule(runTtl)
+    await runModule(runLimits)
+    await runModule(runVersions)
+    await runModule(runUpgrades)
 
     if (driver.capabilities.includes(TS_ONLY_SCENARIOS.requiredCapability)) {
-      await TS_ONLY_SCENARIOS.run(t, ctx)
+      await runModule(TS_ONLY_SCENARIOS.run)
     } else {
       console.log('')
       console.log(`NOT RUN — TS-only fault-injection scenario (driver "${sdkName}")`)

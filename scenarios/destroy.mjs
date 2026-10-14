@@ -58,6 +58,10 @@ export async function runDestroy(t, ctx) {
 
     // Reopening the same state dir yields a FRESH identity — nothing is
     // addressed to the old keys afterwards because they no longer exist.
+    // (The original processes are stopped first: two live sessions on one
+    // identity compete for the relay's per-device session slot.)
+    await a.stop()
+    await b.stop()
     const a2 = await ctx.openClient('rotate-a-reopened', { stateDir: aState })
     notStrictEqual(a2.me.id, aOldId)
     strictEqual((await a2.request('status')).status, 'notJoined')
@@ -93,6 +97,8 @@ export async function runDestroy(t, ctx) {
 
     // Both devices start over. The (stolen) b device joins a's fresh
     // token — but without the explicit accept it never becomes a member.
+    await a.stop()
+    await b.stop()
     const a2 = await ctx.openClient('stolen-a-reopened', { stateDir: aState })
     const b2 = await ctx.openClient('stolen-b-reopened', { stateDir: bState })
     const { token } = await a2.request('startPairing')

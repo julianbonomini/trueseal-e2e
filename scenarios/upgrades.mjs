@@ -52,16 +52,26 @@ async function pollStatus(client, wanted, timeoutMs, label) {
 
 export async function runUpgrades(t, ctx) {
   await t.test('G6: the member-with-outbox fixture opens and its queue drains to the relay (ADR-0032)', async () => {
-    const stateDir = join(ctx.root, 'fixture-outbox')
-    stageFixture(ctx, 'member-with-outbox', stateDir)
-    const client = await ctx.openClient('fixture-outbox', { stateDir })
-    strictEqual((await client.request('status')).status, 'member')
-    // The fixture's queued outbox entry is addressed to its synthetic
-    // manifest member — a random recipient key that exists nowhere but
-    // the relay's inbox. The resumed pump pushes it: the row landing in
-    // the relay store is the drain evidence.
-    execFileSync(ctx.duplicateInbox, ['wait-queued', ctx.relay.database], { stdio: 'inherit' })
-    await client.stop()
+    // Own relay: the fixture's queued entry is addressed to a SYNTHETIC
+    // manifest member — a random recipient key that exists nowhere — so
+    // the pushed row would sit in the shared inbox forever and poison
+    // later tests' wait-empty assertions.
+    await ctx.relay.stop()
+    const ownRelay = ctx.spawnRelay(join(ctx.root, 'fixture-outbox-relay'))
+    try {
+      await ownRelay.start()
+      const stateDir = join(ctx.root, 'fixture-outbox')
+      stageFixture(ctx, 'member-with-outbox', stateDir)
+      const client = await ctx.openClient('fixture-outbox', { stateDir, relay: ownRelay })
+      strictEqual((await client.request('status')).status, 'member')
+      // The resumed pump pushes the queued entry: the row landing in
+      // the relay store is the drain evidence.
+      execFileSync(ctx.duplicateInbox, ['wait-queued', ownRelay.database], { stdio: 'inherit' })
+      await client.stop()
+    } finally {
+      await ownRelay.stop()
+      await ctx.relay.start()
+    }
   })
 
   await t.test('G6: the dedup-in-use fixture opens clean (ADR-0032)', async () => {
@@ -121,10 +131,12 @@ export async function runUpgrades(t, ctx) {
     const stateDir = join(ctx.root, 'fixture-too-new')
     stageFixture(ctx, 'member-with-outbox', stateDir)
     const database = join(stateDir, 'trueseal_e2e.db')
-    // Doctor the Store Version past the migration floor.
+    // Doctor the Store Version past the migration floor. The version
+    // lives in the store's meta table (sync store.rs META_STORE_VERSION),
+    // not in the SQLite user_version pragma.
     execFileSync('python3', [
       '-c',
-      'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("PRAGMA user_version=99"); c.commit(); c.close()',
+      'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("UPDATE meta SET value=99 WHERE key=\'store_version\'"); c.commit(); c.close()',
       database,
     ])
     const before = sha256(database)
@@ -151,7 +163,10 @@ export async function runUpgrades(t, ctx) {
     await ctx.relay.stop()
     const fixtureDir = join(ctx.root, 'relay-fixture')
     mkdirSync(fixtureDir, { recursive: true })
-    copyFileSync(join(ctx.relayRepo, 'testdata', 'store-v1.db'), join(fixtureDir, 'inbox.db'))
+    copyFileSync(
+      join(ctx.relayRepo, 'internal', 'store', 'sqlite', 'testdata', 'store-v1.db'),
+      join(fixtureDir, 'inbox.db'),
+    )
     const fixtureRelay = ctx.spawnRelay(fixtureDir)
     try {
       await fixtureRelay.start()
