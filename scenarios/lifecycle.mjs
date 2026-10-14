@@ -25,7 +25,7 @@ export function hex(text) {
  */
 /** Polls the members command until it settles (the Swift SDK's members
  *  is an @Observable snapshot refreshed asynchronously, D1). */
-async function pollMembers(client, timeoutMs = 10_000) {
+export async function pollMembers(client, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs
   let last = []
   while (Date.now() < deadline) {
@@ -36,12 +36,12 @@ async function pollMembers(client, timeoutMs = 10_000) {
   return last
 }
 
-function textOf(notification) {
+export function textOf(notification) {
   return Buffer.from(notification.message.bodyHex, 'hex').toString('utf8')
 }
 
 /** Explicit admission over Protocol v1 notifications. */
-async function pair(host, joiner) {
+export async function pair(host, joiner) {
   const { token } = await host.request('startPairing')
   const request = host.waitForEvent('joinRequest', 15_000, 'joinRequest event')
   await joiner.request('join', { token })

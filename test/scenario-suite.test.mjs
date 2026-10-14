@@ -6,6 +6,14 @@ import { test } from 'node:test'
 import { RelayProcess } from '../lib/relay-process.mjs'
 import { sdkDriver, relayAddress } from '../lib/sdk-drivers.mjs'
 import { runLifecycle } from '../scenarios/lifecycle.mjs'
+import { runPairing } from '../scenarios/pairing.mjs'
+import { runDelivery } from '../scenarios/delivery.mjs'
+import { runMembership } from '../scenarios/membership.mjs'
+import { runDestroy } from '../scenarios/destroy.mjs'
+import { runTtl } from '../scenarios/ttl.mjs'
+import { runLimits } from '../scenarios/limits.mjs'
+import { runVersions } from '../scenarios/versions.mjs'
+import { runUpgrades } from '../scenarios/upgrades.mjs'
 import { TS_ONLY_SCENARIOS } from '../scenarios/ts-only.mjs'
 
 // The Scenario Suite (G1): one shared Scenario Driver runs the same
@@ -18,7 +26,7 @@ const duplicateInbox = resolve(process.env.TRUESEAL_DUPLICATE_INBOX_BIN)
 const layout = JSON.parse(process.env.TRUESEAL_E2E_LAYOUT)
 const root = mkdtempSync(join(tmpdir(), `trueseal-e2e-suite-${sdkName}-`))
 
-test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { timeout: 180_000 }, async t => {
+test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { timeout: 600_000 }, async t => {
   const relay = new RelayProcess({ binary: relayBinary, stateDir: join(root, 'relay') })
   const clients = []
 
@@ -27,7 +35,28 @@ test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { t
     duplicateInbox,
     knownDeviations: driver.deviations ?? [],
     sdk: sdkName,
-    async openClient(name, { stateDir = join(root, name), extraEnv = {} } = {}) {
+    root,
+    e2eRepo: layout.e2eRepo,
+    relayRepo: layout.relayRepo,
+    get relayAddress() {
+      return relayAddress(relay)
+    },
+    /** A second relay process on the same ports (use only while the main
+     *  relay is stopped) — e.g. the G6 committed store fixture. */
+    spawnRelay(stateDir, extraEnv = {}) {
+      return new RelayProcess({ binary: relayBinary, stateDir, extraEnv })
+    },
+    /** Spawns a driver WITHOUT opening a session (the storeTooNew row
+     *  must drive `open` itself to catch the typed failure). */
+    async spawnOnly(name, { stateDir = join(root, name), extraEnv = {} } = {}) {
+      mkdirSync(stateDir, { recursive: true })
+      const process = driver.spawn({ layout, stateDir, extraEnv })
+      await process.start()
+      process.stateDir = stateDir
+      clients.push(process)
+      return process
+    },
+    async openClient(name, { stateDir = join(root, name), extraEnv = {}, relay: targetRelay } = {}) {
       // The core opens the DB file but does not create its parent
       // directory — the harness owns the state dirs.
       mkdirSync(stateDir, { recursive: true })
@@ -35,7 +64,7 @@ test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { t
       await process.start()
       const { me } = await process.request('open', {
         storagePath: stateDir,
-        relay: relayAddress(relay),
+        relay: relayAddress(targetRelay ?? relay),
         namespace: 'e2e',
       })
       // Suite ergonomics: every client observes messages, events and
@@ -54,6 +83,14 @@ test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { t
   try {
     await relay.start()
     await runLifecycle(t, ctx)
+    await runPairing(t, ctx)
+    await runDelivery(t, ctx)
+    await runMembership(t, ctx)
+    await runDestroy(t, ctx)
+    await runTtl(t, ctx)
+    await runLimits(t, ctx)
+    await runVersions(t, ctx)
+    await runUpgrades(t, ctx)
 
     if (driver.capabilities.includes(TS_ONLY_SCENARIOS.requiredCapability)) {
       await TS_ONLY_SCENARIOS.run(t, ctx)
