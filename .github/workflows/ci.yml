@@ -7,6 +7,10 @@ env:
   # lockstep with the trueseal-sync release train (the Release Conductor,
   # E2E-8, owns this at release time).
   TRUESEAL_SWIFT_CORE_SHA256: 61557fb4b084087ee6fbd757647c0cef604adb45144cc7a98e03c6d5ebf6c3c8
+  # The artifact fetch authenticates its GitHub API calls in CI — the
+  # unauthenticated 60/hr budget is shared per runner IP and 403s under
+  # load. Reading the PUBLIC mirror repo with the job token is allowed.
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 on:
   push:

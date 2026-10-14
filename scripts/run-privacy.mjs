@@ -56,5 +56,13 @@ run(
     TRUESEAL_E2E_MODE: mode,
     TRUESEAL_E2E_PINS: JSON.stringify(pins),
     TRUESEAL_E2E_EVIDENCE_DIR: process.env.TRUESEAL_E2E_EVIDENCE_DIR ?? join(repo, 'gates', 'evidence'),
+    TRUESEAL_E2E_LAYOUT: JSON.stringify({
+      e2eRepo: layout.e2eRepo,
+      tsRepo: layout.tsRepo,
+      syncRepo: layout.syncRepo,
+      kotlinRepo: layout.kotlinRepo,
+      swiftRepo: layout.swiftRepo,
+      swiftClientDir: layout.swiftClientDir,
+    }),
   },
 )
