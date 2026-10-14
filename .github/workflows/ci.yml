@@ -5,11 +5,75 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Dev Mode nightly: builds sibling main HEADs, never gates (e2e ADR-0001).
+    - cron: '17 3 * * *'
 
 jobs:
-  core-lifecycle:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  gate:
+    # THE RELEASE GATE SHAPE: no sibling checkouts anywhere in this job.
+    # scripts/run.mjs clones the exact pins.json refs into an isolated tree
+    # and refuses sibling overrides, escaping path deps and unpinned refs
+    # (E2E-9 / G8).
+    name: "gate / ${{ matrix.lane }}"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: system
+            os: ubuntu-latest
+            command: node scripts/run.mjs --mode gate
+          - lane: rust-typescript
+            os: ubuntu-latest
+            command: node scripts/run-interop.mjs rust --mode gate
+          - lane: swift-typescript
+            os: macos-latest
+            command: node scripts/run-interop.mjs swift --mode gate
+
+    steps:
+      - name: Checkout E2E harness
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run ${{ matrix.lane }} (gate mode)
+        run: ${{ matrix.command }}
+
+  dev:
+    # DEV MODE: builds sibling main HEADs for early feedback. It runs on e2e
+    # changes and nightly, is labeled non-gating, and never blocks a release
+    # (e2e ADR-0001 "Dev Mode ... never gates a release").
+    name: "dev / ${{ matrix.lane }} (non-gating)"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: system
+            os: ubuntu-latest
+            command: node scripts/run.mjs --mode dev
+            needs_ts: true
+          - lane: rust-typescript
+            os: ubuntu-latest
+            command: node scripts/run-interop.mjs rust --mode dev
+            needs_ts: true
+          - lane: swift-typescript
+            os: macos-latest
+            command: node scripts/run-interop.mjs swift --mode dev
+            needs_ts: true
+            needs_swift: true
 
     steps:
       - name: Checkout E2E harness
@@ -30,112 +94,22 @@ jobs:
           path: trueseal-sync
 
       - name: Checkout TypeScript SDK
+        if: matrix.needs_ts
         uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/trueseal-sync-ts
           path: trueseal-sync-ts
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: trueseal-sync-ts/package-lock.json
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: trueseal-relay/go.mod
-          cache-dependency-path: trueseal-relay/go.sum
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Run system E2E
-        working-directory: trueseal-e2e
-        run: npm test
-
-  rust-typescript:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout E2E harness
-        uses: actions/checkout@v7
-        with:
-          path: trueseal-e2e
-
-      - name: Checkout relay
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ github.repository_owner }}/trueseal-relay
-          path: trueseal-relay
-
-      - name: Checkout sync core
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ github.repository_owner }}/trueseal-sync
-          path: trueseal-sync
-
-      - name: Checkout TypeScript SDK
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ github.repository_owner }}/trueseal-sync-ts
-          path: trueseal-sync-ts
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: trueseal-sync-ts/package-lock.json
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: trueseal-relay/go.mod
-          cache-dependency-path: trueseal-relay/go.sum
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Run Rust and TypeScript interop
-        working-directory: trueseal-e2e
-        run: npm run test:rust
-
-  swift-typescript:
-    runs-on: macos-latest
-    timeout-minutes: 25
-
-    steps:
-      - name: Checkout E2E harness
-        uses: actions/checkout@v7
-        with:
-          path: trueseal-e2e
-
-      - name: Checkout relay
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ github.repository_owner }}/trueseal-relay
-          path: trueseal-relay
-
-      - name: Checkout sync core
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ github.repository_owner }}/trueseal-sync
-          path: trueseal-sync
 
       - name: Checkout Swift SDK
+        if: matrix.needs_swift
         uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/trueseal-sync-swift
           path: trueseal-sync-swift
 
-      - name: Checkout TypeScript SDK
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ github.repository_owner }}/trueseal-sync-ts
-          path: trueseal-sync-ts
-
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: trueseal-sync-ts/package-lock.json
 
       - uses: actions/setup-go@v7
         with:
@@ -144,6 +118,6 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Run Swift and TypeScript interop
+      - name: Run ${{ matrix.lane }} (DEV MODE — non-gating)
         working-directory: trueseal-e2e
-        run: npm run test:swift
+        run: ${{ matrix.command }}

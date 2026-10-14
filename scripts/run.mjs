@@ -3,16 +3,20 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildRelay, buildTypeScriptSdk, parseMode, prepareWorkspace } from '../lib/workspace.mjs'
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const workspace = resolve(repo, '..')
-const relayRepo = resolve(process.env.TRUESEAL_RELAY_REPO ?? join(workspace, 'trueseal-relay'))
-const tsRepo = resolve(process.env.TRUESEAL_TS_REPO ?? join(workspace, 'trueseal-sync-ts'))
+const mode = parseMode(process.argv.slice(2))
+const layout = prepareWorkspace(mode)
+
 const artifacts = mkdtempSync(join(tmpdir(), 'trueseal-e2e-build-'))
 const relayBin = join(artifacts, 'trueseal-relay')
 const duplicateInboxBin = join(artifacts, 'duplicate-inbox')
 
-process.on('exit', () => rmSync(artifacts, { recursive: true, force: true }))
+process.on('exit', () => {
+  rmSync(artifacts, { recursive: true, force: true })
+  layout.cleanup()
+})
 
 function run(command, args, cwd, extraEnv = {}) {
   const result = spawnSync(command, args, {
@@ -25,16 +29,17 @@ function run(command, args, cwd, extraEnv = {}) {
 }
 
 if (process.env.TRUESEAL_E2E_SKIP_PREPARE !== '1') {
-  run('npm', ['ci', '--registry=https://registry.npmjs.org'], tsRepo)
-  run('npm', ['run', 'build'], tsRepo)
-  run('go', ['build', '-o', relayBin, './cmd/trueseal-relay'], relayRepo)
-  run('go', ['build', '-o', duplicateInboxBin, join(repo, 'scripts', 'duplicate-inbox.go')], relayRepo)
+  buildTypeScriptSdk(layout.tsRepo, run)
+  buildRelay(layout.relayRepo, relayBin, run)
+  // duplicate-inbox.go resolves modernc.org/sqlite through the relay's go.mod,
+  // so it builds with the relay checkout as its working directory.
+  run('go', ['build', '-o', duplicateInboxBin, join(layout.e2eRepo, 'scripts', 'duplicate-inbox.go')], layout.relayRepo)
 } else if (!process.env.TRUESEAL_RELAY_BIN) {
-  run('go', ['build', '-o', relayBin, './cmd/trueseal-relay'], relayRepo)
+  buildRelay(layout.relayRepo, relayBin, run)
 }
 
 if (process.env.TRUESEAL_E2E_SKIP_PREPARE === '1' && !process.env.TRUESEAL_DUPLICATE_INBOX_BIN) {
-  run('go', ['build', '-o', duplicateInboxBin, join(repo, 'scripts', 'duplicate-inbox.go')], relayRepo)
+  run('go', ['build', '-o', duplicateInboxBin, join(layout.e2eRepo, 'scripts', 'duplicate-inbox.go')], layout.relayRepo)
 }
 
 const effectiveRelayBin = resolve(process.env.TRUESEAL_RELAY_BIN ?? relayBin)
@@ -50,6 +55,6 @@ run(
   {
     TRUESEAL_RELAY_BIN: effectiveRelayBin,
     TRUESEAL_DUPLICATE_INBOX_BIN: effectiveDuplicateInboxBin,
-    TRUESEAL_TS_REPO: tsRepo,
+    TRUESEAL_TS_REPO: layout.tsRepo,
   },
 )

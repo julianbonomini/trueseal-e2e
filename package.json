@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node scripts/run.mjs",
-    "test:rust": "node scripts/run-interop.mjs rust",
-    "test:swift": "node scripts/run-interop.mjs swift"
+    "test": "node scripts/run.mjs --mode dev",
+    "test:gate": "node scripts/run.mjs --mode gate",
+    "test:rust": "node scripts/run-interop.mjs rust --mode dev",
+    "test:rust:gate": "node scripts/run-interop.mjs rust --mode gate",
+    "test:swift": "node scripts/run-interop.mjs swift --mode dev",
+    "test:swift:gate": "node scripts/run-interop.mjs swift --mode gate"
   },
   "engines": {
     "node": ">=18"
