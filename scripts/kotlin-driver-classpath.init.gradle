@@ -1,0 +1,17 @@
+// E2E-1: resolves the jvm-test Scenario Driver's runtime classpath without
+// modifying the kotlin checkout (trueseal-e2e consumes the driver as-is).
+// Usage: gradlew -I <this file> :jvm-test:classes :jvm-test:e2eRuntimeClasspath
+allprojects { project ->
+    project.afterEvaluate { proj ->
+        def sourceSets = proj.extensions.findByName('sourceSets')
+        def main = sourceSets?.findByName('main')
+        if (main != null) {
+            proj.tasks.register('e2eRuntimeClasspath') {
+                doLast {
+                    def files = main.runtimeClasspath.files + main.output.classesDirs.files
+                    println('CLASSPATH:' + files.join(File.pathSeparator))
+                }
+            }
+        }
+    }
+}

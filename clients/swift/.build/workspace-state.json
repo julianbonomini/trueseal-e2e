@@ -1,0 +1,44 @@
+{
+  "object" : {
+    "artifacts" : [
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "trueseal-sync-swift",
+          "kind" : "fileSystem",
+          "location" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-sync-swift",
+          "name" : "TruesealSync"
+        },
+        "path" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-sync-swift/TruesealSyncFFI.xcframework",
+        "source" : {
+          "type" : "local"
+        },
+        "targetName" : "TruesealSyncFFI"
+      }
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "trueseal-sync-swift",
+          "kind" : "fileSystem",
+          "location" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-sync-swift",
+          "name" : "TruesealSync"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-sync-swift"
+        },
+        "subpath" : "trueseal-sync-swift"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

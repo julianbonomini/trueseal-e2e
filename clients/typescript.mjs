@@ -2,127 +2,194 @@ import { createRequire } from 'node:module'
 import { createInterface } from 'node:readline'
 import { resolve } from 'node:path'
 
+// The TypeScript Scenario Driver — Protocol Version 1
+// (docs/scenario-driver-protocol.md). Speaks JSON lines over stdin/stdout
+// and drives ONLY the public @trueseal/sync API (e2e#5: no core or FFI
+// imports). Started by the harness with TRUESEAL_TS_REPO pointing at the
+// (pinned, in gate mode) SDK checkout.
 const require = createRequire(import.meta.url)
 const tsRepo = resolve(process.env.TRUESEAL_TS_REPO)
 const { TrueSeal } = require(tsRepo)
-
-function argument(name) {
-  const index = process.argv.indexOf(name)
-  if (index < 0 || !process.argv[index + 1]) throw new Error(`missing ${name}`)
-  return process.argv[index + 1]
-}
 
 function emit(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`)
 }
 
-// The harness drives the relay on the default ports (lib/relay-process.mjs),
-// so the Relay Address is explicit about both.
-const relayAddress = `trueseal://${argument('--relay-pub')}@${argument('--relay-host')}:7700?push=7701`
+function reply(id, ok, payload) {
+  emit(ok ? { id, ok: true, result: payload } : { id, ok: false, error: payload })
+}
 
-const ts = await TrueSeal.open(relayAddress, {
-  storageDir: resolve(argument('--state-dir')),
-  namespace: 'e2e',
-})
+function errorJson(error) {
+  // TrueSealError carries the canonical code (D21); anything else is a
+  // driver-local failure, never an SDK error.
+  const code = typeof error?.code === 'string' ? error.code : 'driver'
+  return { code, message: error?.message ?? String(error) }
+}
 
-// The canonical API emits membersChanged snapshots (ADR-0028); the harness
-// protocol speaks memberJoined/memberLeft, so the client diffs snapshots.
-let knownMembers = new Map(ts.members.map(member => [member.id, member]))
+function memberJson(member) {
+  return { id: member.id, name: member.name }
+}
 
-ts.onMessage(message => {
-  const text = message.body.toString('utf8')
-  // Test-only fault injection: the app misses its commit but the handler
-  // returns normally — the library acks (ADR-0026 ack-after-handler), and
-  // the message is never redelivered.
-  if (text === process.env.TRUESEAL_E2E_DROP_BEFORE_COMMIT_TEXT) return
-  emit({
-    event: 'message',
-    text,
-    data: message.body.toString('base64'),
-    senderId: message.from.id,
-    messageId: message.id,
-  })
-})
-
-ts.onEvent(event => {
-  switch (event.type) {
-    case 'joinRequest':
-      emit({ event: 'memberRequest', requestToken: event.request.id, name: event.request.name })
-      break
-    case 'membersChanged': {
-      const next = new Map(event.members.map(member => [member.id, member]))
-      for (const [id, member] of next) {
-        if (!knownMembers.has(id)) emit({ event: 'memberJoined', member: { id: member.id, name: member.name } })
-      }
-      for (const [id, member] of knownMembers) {
-        if (!next.has(id)) emit({ event: 'memberLeft', member: { id: member.id, name: member.name } })
-      }
-      knownMembers = next
-      break
-    }
-    case 'statusChanged':
-      if (event.status === 'notJoined' && event.reason === 'removed') emit({ event: 'removedFromGroup' })
-      if (event.status === 'notJoined' && event.reason === 'destroyed') emit({ event: 'groupDestroyed' })
-      break
-    case 'connectionChanged':
-      emit({ event: 'connectionChanged', connected: event.connection.state === 'connected' })
-      break
-    default:
-      break
+function connectionJson(connection) {
+  const value = { state: connection.state }
+  if (connection.state === 'relayVersionUnsupported') {
+    value.min = connection.min
+    value.max = connection.max
   }
-})
+  return value
+}
 
-ts.onDeliveryIssue(issue => {
-  emit({ event: 'deliveryIssue', issue })
-})
+let ts = null
 
-emit({
-  event: 'ready',
-  localNodeId: ts.me.id,
-  localDeviceName: ts.me.name,
-  members: ts.members,
-})
+function requireSession() {
+  if (!ts) throw new Error('no open session — send "open" first')
+  return ts
+}
 
-async function execute(message) {
-  switch (message.command) {
-    case 'pairingToken':
-      return ts.startPairing()
-    case 'joinGroup':
-      ts.join(message.token)
-      return null
-    case 'acceptPairingRequest':
-      ts.accept(message.requestToken)
-      return null
-    case 'cancelPairing':
-      ts.cancelPairing()
-      return null
+async function execute(command, request) {
+  switch (command) {
+    case 'open': {
+      if (ts) throw new Error('a session is already open')
+      ts = await TrueSeal.open(request.relay, {
+        storageDir: resolve(request.storagePath),
+        namespace: request.namespace ?? 'default',
+        maxPayloadBytes: request.maxPayloadBytes,
+      })
+      return { me: memberJson(ts.me) }
+    }
+    case 'close': {
+      requireSession().close()
+      ts = null
+      return {}
+    }
+    case 'info': {
+      const info = TrueSeal.info
+      return {
+        sdkVersion: info.sdkVersion,
+        transportVersion: info.transportVersion,
+        endToEndVersion: info.endToEndVersion,
+        maxPayloadBytes: TrueSeal.maxPayloadBytes,
+        maxGroupSize: TrueSeal.maxGroupSize,
+      }
+    }
     case 'send':
-      ts.send(Buffer.from(message.data, 'base64'))
-      return null
-    case 'members':
-      return ts.members
-    case 'removeMember':
-      ts.remove(message.memberId)
-      return null
+      return { messageId: requireSession().send(Buffer.from(request.bodyHex, 'hex')) }
+    case 'startPairing':
+      return { token: requireSession().startPairing() }
+    case 'accept':
+      requireSession().accept(request.requestId)
+      return {}
+    case 'cancelPairing':
+      requireSession().cancelPairing()
+      return {}
+    case 'join':
+      requireSession().join(request.token)
+      return {}
+    case 'cancelJoin':
+      requireSession().cancelJoin()
+      return {}
+    case 'remove':
+      requireSession().remove(request.memberId)
+      return {}
+    case 'leave':
+      requireSession().leave()
+      return {}
     case 'destroyGroup':
-      ts.destroyGroup()
-      return null
+      requireSession().destroyGroup()
+      return {}
+    case 'status':
+      return { status: requireSession().status }
+    case 'me':
+      return { me: memberJson(requireSession().me) }
+    case 'members':
+      return { members: requireSession().members.map(memberJson) }
+    case 'connection':
+      return { connection: connectionJson(requireSession().connection) }
+    case 'receive':
+      // Registration starts receiving (ADR-0026). The handler is awaited:
+      // a throw is a handler attempt, so notification emission never throws.
+      requireSession().onMessage(async message => {
+        // Test-only fault injection (TS-driver-only capability): the app
+        // misses its commit but the handler returns normally — the library
+        // acks (ADR-0026 ack-after-handler) and the message is never
+        // redelivered.
+        if (message.body.toString('utf8') === process.env.TRUESEAL_E2E_DROP_BEFORE_COMMIT_TEXT) return
+        emit({
+          event: 'message',
+          message: {
+            id: message.id,
+            from: memberJson(message.from),
+            bodyHex: message.body.toString('hex'),
+          },
+        })
+      })
+      return {}
+    case 'listenEvents':
+      requireSession().onEvent(event => {
+        switch (event.type) {
+          case 'statusChanged':
+            emit({ event: 'event', kind: 'statusChanged', status: event.status, reason: event.reason })
+            break
+          case 'membersChanged':
+            emit({ event: 'event', kind: 'membersChanged', members: event.members.map(memberJson) })
+            break
+          case 'joinRequest':
+            emit({ event: 'event', kind: 'joinRequest', requestId: event.request.id, name: event.request.name })
+            break
+          case 'connectionChanged':
+            emit({ event: 'event', kind: 'connectionChanged', connection: connectionJson(event.connection) })
+            break
+          case 'admissionDropped':
+            emit({ event: 'event', kind: 'admissionDropped', name: event.name, reason: event.reason })
+            break
+        }
+      })
+      return {}
+    case 'listenIssues':
+      requireSession().onDeliveryIssue(issue => {
+        switch (issue.type) {
+          case 'unreadable':
+            emit({ event: 'issue', kind: 'unreadable', reason: issue.reason })
+            break
+          case 'unauthorized':
+            emit({ event: 'issue', kind: 'unauthorized' })
+            break
+          case 'heldForUpgrade':
+            emit({ event: 'issue', kind: 'heldForUpgrade', version: issue.version })
+            break
+          case 'handlerGaveUp':
+            emit({ event: 'issue', kind: 'handlerGaveUp', messageId: issue.messageId, error: issue.error })
+            break
+          case 'sendFailed':
+            emit({ event: 'issue', kind: 'sendFailed', messageId: issue.messageId, reason: issue.reason })
+            break
+        }
+      })
+      return {}
     default:
-      throw new Error(`unknown command: ${message.command}`)
+      throw new Error(`unknown command "${command}"`)
   }
 }
 
 const lines = createInterface({ input: process.stdin, crlfDelay: Infinity })
 for await (const line of lines) {
   if (!line.trim()) continue
-  let message
+  let request
   try {
-    message = JSON.parse(line)
-    const result = await execute(message)
-    emit({ id: message.id, ok: true, result })
+    request = JSON.parse(line)
   } catch (error) {
-    emit({ id: message?.id, ok: false, error: error?.message ?? String(error) })
+    reply(null, false, { code: 'malformed', message: `not a JSON object: ${error.message}` })
+    continue
+  }
+  if (typeof request.command !== 'string') {
+    reply(request.id ?? null, false, { code: 'malformed', message: 'missing "command"' })
+    continue
+  }
+  try {
+    reply(request.id ?? null, true, await execute(request.command, request))
+  } catch (error) {
+    reply(request.id ?? null, false, errorJson(error))
   }
 }
 
-ts.close()
+ts?.close()

@@ -15,20 +15,25 @@ In CI the `gate / *` jobs check out only this repository; sibling sources enter 
 
 ## Test lanes
 
-The fast core lifecycle lane starts a real `trueseal-relay` process and drives isolated TypeScript SDK client processes through:
+**The Scenario Suite (E2E-1, G1).** One shared Scenario Driver runs the same scenario files against each public SDK, selected by lane, through the test-only JSON control protocol ([`docs/scenario-driver-protocol.md`](docs/scenario-driver-protocol.md), Protocol Version 1). Each lane starts a real `trueseal-relay` process and drives isolated SDK driver processes through:
 
 - Pairing token generation, join request, and explicit admission.
 - Bidirectional encrypted delivery.
 - Recipient process restart with deferred inbox delivery.
-- Duplicate relay delivery with one stable application Message ID.
-- The acknowledged-before-application-commit crash window.
+- Duplicate relay delivery, deduplicated by the library's Replay Window (ADR-0031).
 - Relay restart with sender outbox replay.
 - Member removal.
 - Destroy Group propagation.
 
+The drivers: TypeScript (`clients/typescript.mjs`, this repo), Kotlin (`dev.trueseal.sync.driver.Main` from the pinned `trueseal-sync-kotlin` `jvm-test` module — the headless lane runs on Linux per e2e ADR-0001), and Swift (`clients/swift`, this repo). Drivers use only their SDK's public API; error codes are the canonical Shared Facts codes, and gate runs check `scenarios/protocol.json` against the pinned core's `docs/shared-facts.json` (G12 discipline). A driver that is missing or cannot start fails its lane — never a silent skip. Scenario-granular skips (the TS-only fault-injection scenario) and SDK conformance deviations are reported loudly and tracked (see `lib/sdk-drivers.mjs`).
+
+Run one lane: `node scripts/run-scenarios.mjs <ts|kotlin|swift> --mode <gate|dev>`.
+
+**The Interop Smoke** pairs the TypeScript driver with a foreign driver binary over the real relay — both sides speak Protocol v1, so the lane needs no per-adapter code. The full pairwise matrix arrives with E2E-4.
+
 Each run generates a fresh relay identity, SQLite inbox, and client state under a temporary directory. Missing dependencies or an unavailable relay fail the run; tests never silently skip.
 
-Two interoperability lanes pair a TypeScript client with a purpose-built Rust or Swift client over the real relay. **Both currently report NOT RUN**: their clients were written against the pre-canonical SDK APIs that SDK-1 and SYNC-15 removed. The skip is explicit and tracked — see [`gates/not-run.json`](gates/not-run.json) — and E2E-1 ([#5](https://github.com/julianbonomini/trueseal-e2e/issues/5)) rebuilds both as Scenario Drivers and empties that file. A lane that builds while it is listed there fails as drift; a lane that fails without being listed fails the run.
+The Swift interop lane runs for real (E2E-1 rebuilt the Swift client as a Protocol v1 Scenario Driver). The Rust lane reports NOT RUN: per e2e ADR-0001 "SDK matrix" the Rust client is not part of the SDK matrix — it becomes the Adversary Client base, rebuilt in E2E-5 ([#9](https://github.com/julianbonomini/trueseal-e2e/issues/9)). The skip is explicit and tracked — see [`gates/not-run.json`](gates/not-run.json). A lane that builds while it is listed there fails as drift; a lane that fails without being listed fails the run.
 
 Kotlin is Android-only, so running it as a desktop command-line client would bypass the public API that applications actually use. Its headless coverage arrives with E2E-1 through the test-only JVM build (KOTLIN-2); packaging is covered by the Android emulator smoke (E2E-6).
 
@@ -73,7 +78,9 @@ TRUESEAL_E2E_SKIP_PREPARE=1 npm test
 - `clients/`: headless adapters over public SDK APIs.
 - `lib/`: process, relay and workspace/mode orchestration.
 - `gates/`: gate policy data (the not-run list).
-- `test/`: user-visible scenarios and assertions.
+- `scenarios/`: the SDK-agnostic scenario files the Scenario Driver runs (`protocol.json` is the machine-readable protocol vocabulary, checked against the pinned core's Shared Facts).
+- `test/`: the suite and interop entry points.
+- `clients/`: the TypeScript and Swift Scenario Drivers (the Kotlin driver lives in trueseal-sync-kotlin's `jvm-test` module; Rust becomes the Adversary Client in E2E-5).
 - `scripts/run.mjs`: one-command local/CI entry point (`--mode` required).
 - `pins.json`: the exact refs gate mode builds.
 

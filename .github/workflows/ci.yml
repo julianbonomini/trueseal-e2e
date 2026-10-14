@@ -1,5 +1,17 @@
 name: E2E
 
+env:
+  # The exact sha256 of the pinned core's Swift artifact (the core
+  # release's published checksum — G8). The harness refuses to fetch the
+  # XCFramework for a pinned Swift checkout without it. Must move in
+  # lockstep with the trueseal-sync release train (the Release Conductor,
+  # E2E-8, owns this at release time).
+  TRUESEAL_SWIFT_CORE_SHA256: 61557fb4b084087ee6fbd757647c0cef604adb45144cc7a98e03c6d5ebf6c3c8
+  # The artifact fetch authenticates its GitHub API calls in CI — the
+  # unauthenticated 60/hr budget is shared per runner IP and 403s under
+  # load. Reading the PUBLIC mirror repo with the job token is allowed.
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 on:
   push:
     branches: [main]
@@ -22,9 +34,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - lane: system
+          # The Scenario Suite (E2E-1 / G1): the same scenario files through
+          # the shared Scenario Driver, one lane per SDK. Kotlin's headless
+          # lane runs on Linux by design (e2e ADR-0001).
+          - lane: scenario-ts
             os: ubuntu-latest
-            command: node scripts/run.mjs --mode gate
+            command: node scripts/run-scenarios.mjs ts --mode gate
+          - lane: scenario-kotlin
+            os: ubuntu-latest
+            command: node scripts/run-scenarios.mjs kotlin --mode gate
+            java: true
+          - lane: scenario-swift
+            os: macos-latest
+            command: node scripts/run-scenarios.mjs swift --mode gate
           - lane: relay-privacy
             os: ubuntu-latest
             command: node scripts/run-privacy.mjs --mode gate
@@ -48,6 +70,20 @@ jobs:
           go-version: '1.26'
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up JDK 17 (Kotlin Scenario Driver lane)
+        if: matrix.java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up JDK 17 (Kotlin Scenario Driver lane)
+        if: matrix.java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       # The duplicate-inbox helper's regression tests (E3b: the watermark
       # discipline that keeps at-least-once inbox rows from racing the
@@ -82,10 +118,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - lane: system
+          - lane: scenario-ts
             os: ubuntu-latest
-            command: node scripts/run.mjs --mode dev
+            command: node scripts/run-scenarios.mjs ts --mode dev
             needs_ts: true
+          - lane: scenario-kotlin
+            os: ubuntu-latest
+            command: node scripts/run-scenarios.mjs kotlin --mode dev
+            needs_kotlin: true
+            java: true
+          - lane: scenario-swift
+            os: macos-latest
+            command: node scripts/run-scenarios.mjs swift --mode dev
+            needs_ts: true
+            needs_swift: true
           - lane: relay-privacy
             os: ubuntu-latest
             command: node scripts/run-privacy.mjs --mode dev
@@ -131,6 +177,13 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/trueseal-sync-swift
           path: trueseal-sync-swift
+
+      - name: Checkout Kotlin SDK (dev mode builds sibling HEADs)
+        if: matrix.needs_kotlin
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/trueseal-sync-kotlin
+          path: trueseal-sync-kotlin
 
       - uses: actions/setup-node@v7
         with:

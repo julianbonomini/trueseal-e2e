@@ -1,0 +1,49 @@
+{
+  "" : {
+    "diagnostics" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TruesealSync-primary.dia",
+    "emit-module-dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TruesealSync-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TruesealSync-primary-emit-module.dia",
+    "pch" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TruesealSync-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TruesealSync-primary.swiftdeps"
+  },
+  "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-sync-swift/Sources/TruesealSync/Internal/CallbackBridges.swift" : {
+    "const-values" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/CallbackBridges.swiftconstvalues",
+    "dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/CallbackBridges.d",
+    "diagnostics" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/CallbackBridges.dia",
+    "index-unit-output-path" : "/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/CallbackBridges.o",
+    "llvm-bc" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/CallbackBridges.bc",
+    "object" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/CallbackBridges.o",
+    "swift-dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/CallbackBridges.swiftdeps",
+    "swiftmodule" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/CallbackBridges~partial.swiftmodule"
+  },
+  "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-sync-swift/Sources/TruesealSync/Models.swift" : {
+    "const-values" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/Models.swiftconstvalues",
+    "dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/Models.d",
+    "diagnostics" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/Models.dia",
+    "index-unit-output-path" : "/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/Models.o",
+    "llvm-bc" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/Models.bc",
+    "object" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/Models.o",
+    "swift-dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/Models.swiftdeps",
+    "swiftmodule" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/Models~partial.swiftmodule"
+  },
+  "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-sync-swift/Sources/TruesealSync/TrueSeal.swift" : {
+    "const-values" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSeal.swiftconstvalues",
+    "dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSeal.d",
+    "diagnostics" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSeal.dia",
+    "index-unit-output-path" : "/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSeal.o",
+    "llvm-bc" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSeal.bc",
+    "object" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSeal.o",
+    "swift-dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSeal.swiftdeps",
+    "swiftmodule" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSeal~partial.swiftmodule"
+  },
+  "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-sync-swift/Sources/TruesealSync/TrueSealError.swift" : {
+    "const-values" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSealError.swiftconstvalues",
+    "dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSealError.d",
+    "diagnostics" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSealError.dia",
+    "index-unit-output-path" : "/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSealError.o",
+    "llvm-bc" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSealError.bc",
+    "object" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSealError.o",
+    "swift-dependencies" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSealError.swiftdeps",
+    "swiftmodule" : "/Users/julian.bonomini/Documents/Buenomini/true-seal/trueseal-e2e/clients/swift/.build/out/Intermediates.noindex/TruesealSync.build/Debug/TruesealSync-t.build/Objects-normal/arm64/TrueSealError~partial.swiftmodule"
+  }
+}

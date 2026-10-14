@@ -1,0 +1,335 @@
+[
+  {
+    "isFramework" : true,
+    "moduleName" : "Combine",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Combine-1056XZ3URCNB8.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "CoreFoundation",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/CoreFoundation-2U3NMJQU7L37R.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Darwin",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Darwin-D6K6NWQZRK6P.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Dispatch",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Dispatch-3DA5NWPOC98OY.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "Foundation",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Foundation-2QYJLWPWDPSTH.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "IOKit",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/IOKit-GT60IRBGB99E.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "ObjectiveC",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/ObjectiveC-XPU0YP8LC0ZR.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Observation",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Observation-113HYT9YX0LPJ.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Swift",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Swift-3BITQ7ABXPDTL.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "SwiftOnoneSupport",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftOnoneSupport-S1JCIDZ8QCCL.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "System",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/System-3D85BE1OYOOAE.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "TruesealSync",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/Products\/Debug\/TruesealSync.swiftmodule\/arm64-apple-macos.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "XPC",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/XPC-2UJR555ZQRYO1.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_Builtin_float",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_float-3L3CJ1D6BPWKL.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_Concurrency",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_Concurrency-1HLR9EW0V210R.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation1",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation1-2QWBWUFU19M8I.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation2",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation2-Z70YYW3MVC8K.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation3",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation3-1EUAQKCVNAL6F.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_StringProcessing",
+    "modulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_StringProcessing-JBIAZ1XT2QPI.swiftmodule"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CFNetwork.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/CFNetwork-7HTKO6DO726WHYZQ0GCCO981D.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CFNetwork"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreFoundation.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/CoreFoundation-69D1T7FIS0QRFHMXSY05B3ITK.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreFoundation"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreServices.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/CoreServices-CNN12O6FHEK7FRMDW6DOAX2EF.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreServices"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/Darwin.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Darwin-1BYWE1W8ZCN2QDPQHQCQND0ZY.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Darwin"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/DiskArbitration.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/DiskArbitration-BLRCNKW0RQ18F32A4Z8BN37YQ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "DiskArbitration"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/dispatch.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Dispatch-7I6Q9628O6X2R5IBHR0DHDAK8.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Dispatch"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Foundation.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Foundation-AWTZN9AMFYDVDKRY9IZMO8IW.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Foundation"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/IOKit.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/IOKit-EG130BTV0J3WOQBBXFPFSD5MH.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "IOKit"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinBasic.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/MachO-1YFQO90TTMNWUWTIQ4KLAZUWP.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "MachO"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/ObjectiveC.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/ObjectiveC-DHXDNQ5X8PZ9ZPI09RHLTPU2V.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ObjectiveC"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Security.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/Security-2PA18MGY0U9Y70XSZ3U7EOD5Z.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Security"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/lib\/swift\/shims\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftShims-EJ2F3PI8BJYNZE1D5AZX2BYZ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "SwiftShims"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/xpc.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/XPC-9NTOZXI3CLIR6NTTR718LPW2J.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "XPC"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation1.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_AvailabilityInternal-7D3FZJQKIPE1JHQ4AT40F2M8Q.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_AvailabilityInternal"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_float-33PTHP3QS20CUFV2KD8H6HG8J.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_float"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_inttypes-BRS2UY9MZ2XZOPS49G22LDO2.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_inttypes"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_limits-A56QZDSKVEAC8TDWMAN1UQ5IE.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_limits"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdarg-A7761G3XB04NU27F8H2T8OLDA.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_stdarg"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdbool-D7J4JN7D1QH31695H7QMBF6LO.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_stdbool"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stddef-81Q68J9NXU2M4BHIF3S8BZR4P.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_stddef"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdint-DJKI1GPKDKDPD7NLXDSDQNT2T.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_stdint"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation1.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation1-516XBB3GWCYM353FILSJU4SLJ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation1"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation2.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation2-CO2AFE5OS2XWJ7RMJ9A1KGXQY.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation2"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation3.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation3-EY8DM01973L5LCXMAHJ52PTGX.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation3"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/lib\/swift\/shims\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/_SwiftConcurrencyShims-1LOY2ULQRX9OZF0XJSQRZH7WD.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_SwiftConcurrencyShims"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/launch.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/launch-51WDYAC0QHN3XC5KUSAXXHK3T.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "launch"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/libDER\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/libDER-79S89R8QPJOMEAE00RHU1A1RL.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "libDER"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/libkern.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/libkern-D1QRBQRTS7J69WARG7R1PG7G0.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "libkern"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/os.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/os_object-6YP53JDNZ0NJMUYDBQI42EW44.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "os_object"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/os.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/os_workgroup-2KN7AIYTDRC9MOZQFZBVDFZGF.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "os_workgroup"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/ptrauth-3RNYWODBIZ9KZPMAALW7HN0ED.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ptrauth"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/ptrcheck-2O9EGQ776R5XYZH567P0TGECP.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ptrcheck"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/c_standard_library.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/string_h-BMOEPV1WKMN81TW6TPRSMJYHY.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "string_h"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation2.modulemap",
+    "clangModulePath" : "\/Users\/julian.bonomini\/Documents\/Buenomini\/true-seal\/trueseal-e2e\/clients\/swift\/.build\/out\/SDKExplicitPrecompiledModules\/sys_types-34MUODZIV92WLSPWA0BY8IT2T.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "sys_types"
+  }
+]

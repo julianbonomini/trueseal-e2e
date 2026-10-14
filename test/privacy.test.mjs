@@ -14,12 +14,14 @@ import { deepStrictEqual, ok } from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Socket } from 'node:net'
 import { test } from 'node:test'
 
-import { ClientProcess } from '../lib/client-process.mjs'
+import { DriverProcess } from '../lib/driver-process.mjs'
 import { RelayProcess } from '../lib/relay-process.mjs'
+import { relayAddress } from '../lib/sdk-drivers.mjs'
 import {
   assertNoFindings,
   collectAddressFindings,
@@ -27,6 +29,8 @@ import {
   collectStoreFindings,
 } from '../lib/privacy-assertions.mjs'
 
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const layout = JSON.parse(process.env.TRUESEAL_E2E_LAYOUT)
 const relayBinary = resolve(process.env.TRUESEAL_RELAY_BIN)
 const duplicateInboxBinary = resolve(process.env.TRUESEAL_DUPLICATE_INBOX_BIN)
 const mode = process.env.TRUESEAL_E2E_MODE ?? 'unknown'
@@ -42,19 +46,52 @@ const DEV_BANNER = '*** DEV MODE ENABLED'
 
 const captured = { normal: null, dev: null }
 
+/** Opens a TypeScript Scenario Driver (Protocol v1) against the relay. */
+async function openClient(stateDir, relay) {
+  mkdirSync(stateDir, { recursive: true })
+  const client = new DriverProcess({
+    command: process.execPath,
+    args: [join(layout.e2eRepo, 'clients', 'typescript.mjs')],
+    env: { TRUESEAL_TS_REPO: layout.tsRepo },
+    name: 'g7-ts',
+  })
+  await client.start()
+  const { me } = await client.request('open', {
+    storagePath: stateDir,
+    relay: relayAddress(relay),
+    namespace: 'e2e',
+  })
+  await client.request('listenEvents')
+  await client.request('receive')
+  client.me = me
+  return client
+}
+
 async function pair(host, joiner) {
-  const token = await host.request('pairingToken')
-  const request = host.waitForEvent('memberRequest')
-  await joiner.request('joinGroup', { token })
+  const { token } = await host.request('startPairing')
+  const request = host.waitForEvent('joinRequest', 15_000, 'joinRequest event')
+  await joiner.request('join', { token })
   const incoming = await request
-  const hostJoined = host.waitForEvent('memberJoined')
-  const joinerSide = joiner.waitForEvent('memberJoined')
-  await host.request('acceptPairingRequest', { requestToken: incoming.requestToken })
-  await Promise.all([hostJoined, joinerSide])
+  const hostSees = host.waitForEvent(
+    value => value.kind === 'membersChanged' && value.members.some(member => member.id === joiner.me.id),
+    15_000,
+    'membersChanged containing the joiner',
+  )
+  const joinerSide = joiner.waitForEvent(
+    value => value.kind === 'statusChanged' && value.status === 'member' && value.reason === 'joined',
+    15_000,
+    'statusChanged(member, joined)',
+  )
+  await host.request('accept', { requestId: incoming.requestId })
+  await Promise.all([hostSees, joinerSide])
 }
 
 function encoded(text) {
-  return Buffer.from(text).toString('base64')
+  return Buffer.from(text, 'utf8').toString('hex')
+}
+
+function textOf(notification) {
+  return Buffer.from(notification.message.bodyHex, 'hex').toString('utf8')
 }
 
 /** A raw connection that completes the version exchange then goes silent:
@@ -123,22 +160,24 @@ async function runMode(devMode) {
     report.transportVersion = health.transport_version
 
     // receive + push paths: pair two devices, deliver and ack one message.
-    const a = new ClientProcess({ stateDir: join(root, 'a'), relayPublicKey: relay.publicKey })
+    const a = await openClient(join(root, 'a'), relay)
     clients.push(a)
-    await a.start()
-    const b = new ClientProcess({ stateDir: join(root, 'b'), relayPublicKey: relay.publicKey })
+    const b = await openClient(join(root, 'b'), relay)
     clients.push(b)
-    await b.start()
     await pair(a, b)
-    const delivered = b.waitForEvent('message', event => event.text === markers[0])
-    await a.request('send', { data: encoded(markers[0]) })
+    const delivered = b.waitForEvent(
+      value => value.event === 'message' && textOf(value) === markers[0],
+      15_000,
+      'the marker message',
+    )
+    await a.request('send', { bodyHex: encoded(markers[0]) })
     await delivered
     report.pathsExercised.push('receive', 'push', 'deliver-ack')
 
     // A blob RESIDENT in the store at copy time: B offline, one message
     // queued in its inbox (recipient key + sealed envelope on disk).
     await b.stop()
-    await a.request('send', { data: encoded(markers[1]) })
+    await a.request('send', { bodyHex: encoded(markers[1]) })
     execFileSync(duplicateInboxBinary, ['wait-queued', relay.database], { stdio: 'inherit' })
     report.assertions.push({ name: 'a blob is resident in inbox.db at copy time', result: 'pass' })
 
@@ -149,11 +188,9 @@ async function runMode(devMode) {
     await a.stop()
     const aCopy = join(root, 'a-copy')
     cpSync(join(root, 'a'), aCopy, { recursive: true })
-    const a1 = new ClientProcess({ stateDir: join(root, 'a'), relayPublicKey: relay.publicKey })
-    const a2 = new ClientProcess({ stateDir: aCopy, relayPublicKey: relay.publicKey })
+    const a1 = await openClient(join(root, 'a'), relay)
+    const a2 = await openClient(aCopy, relay)
     clients.push(a1, a2)
-    await a1.start()
-    await a2.start()
     await new Promise(resolvePromise => setTimeout(resolvePromise, 2_000))
     report.pathsExercised.push('connection-limit')
 
@@ -174,7 +211,7 @@ async function runMode(devMode) {
     report.logBytes = Buffer.byteLength(logs)
     report.logLines = logs.split('\n').filter(line => line.length > 0).length
     report.dbBytes = dbBytes.length
-    captured[label] = { logs, dbBytes, markers, ids: [a.ready.localNodeId, b.ready.localNodeId] }
+    captured[label] = { logs, dbBytes, markers, ids: [a.me.id, b.me.id] }
 
     // Mode sanity: the dev banner is present in dev mode and absent in
     // normal mode (proves the two runs really ran in different modes).
@@ -192,12 +229,12 @@ async function runMode(devMode) {
 
     // G7 core: no client address or plaintext client metadata in the store.
     record('no client address or plaintext metadata in inbox.db', () =>
-      assertNoFindings('inbox.db', collectStoreFindings(dbBytes, { markers, ids: [a.ready.localNodeId, b.ready.localNodeId] })))
+      assertNoFindings('inbox.db', collectStoreFindings(dbBytes, { markers, ids: [a.me.id, b.me.id] })))
 
     if (!devMode) {
       // Normal mode additionally: no client metadata at all.
       record('no client metadata in normal-mode logs', () =>
-        assertNoFindings('normal-mode logs', collectMetadataFindings(logs, { knownIds: [a.ready.localNodeId, b.ready.localNodeId] })))
+        assertNoFindings('normal-mode logs', collectMetadataFindings(logs, { knownIds: [a.me.id, b.me.id] })))
     }
 
     // Payload bytes are never logged in ANY mode (ADR-0012).

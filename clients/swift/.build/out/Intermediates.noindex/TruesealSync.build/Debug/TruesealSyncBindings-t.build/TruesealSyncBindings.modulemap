@@ -1,0 +1,4 @@
+module TruesealSyncBindings {
+header "TruesealSyncBindings-Swift.h"
+export *
+}
