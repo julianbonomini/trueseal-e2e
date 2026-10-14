@@ -1,10 +1,11 @@
 {
   "$schema": "gate-mode pins (E2E-9, e2e ADR-0001 'Candidate artifacts, not HEAD')",
-  "comment": "Exact 40-hex commit SHAs that gate-mode runs build. Nothing floating: a value that is not a full SHA fails the run. The Release Conductor (E2E-8, #12) will regenerate this file from each Release Manifest; until then it is updated by hand as sibling mains move. Dev Mode ignores this file — testing main HEADs is its job.",
+  "comment": "Exact 40-hex commit SHAs that gate-mode runs build. Nothing floating: a value that is not a full SHA fails the run. The Release Conductor (E2E-8, #12) will regenerate this file from each Release Manifest; until then it is updated by hand as sibling mains move. Dev Mode ignores this file \u2014 testing main HEADs is its job.",
   "pins": {
     "trueseal-relay": "e0db41df183c50c2d0bfc5e1e8b6e4f51115304f",
     "trueseal-sync": "af16c4e7dbca21e5eaad4a816c2774b9cf8e4d7f",
     "trueseal-sync-swift": "3538cc2de143265bf8068bd94b00640f761fd144",
-    "trueseal-sync-ts": "0aae6d021c2e088cdefb530bb183f3d0c80b85f5"
+    "trueseal-sync-ts": "0aae6d021c2e088cdefb530bb183f3d0c80b85f5",
+    "trueseal-sync-kotlin": "3b3afa2b7bdb78b62b428a1b8b7fc3a97ef4cd0b"
   }
 }
