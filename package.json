@@ -7,12 +7,9 @@
     "test": "node scripts/run.mjs --mode dev",
     "test:gate": "node scripts/run.mjs --mode gate",
     "test:suite": "node scripts/run-scenarios.mjs",
-    "test:rust": "node scripts/run-interop.mjs rust --mode dev",
-    "test:rust:gate": "node scripts/run-interop.mjs rust --mode gate",
-    "test:swift": "node scripts/run-interop.mjs swift --mode dev",
-    "test:swift:gate": "node scripts/run-interop.mjs swift --mode gate",
     "test:privacy": "node scripts/run-privacy.mjs --mode dev",
-    "test:privacy:gate": "node scripts/run-privacy.mjs --mode gate"
+    "test:privacy:gate": "node scripts/run-privacy.mjs --mode gate",
+    "test:interop": "node scripts/run-interop.mjs"
   },
   "engines": {
     "node": ">=18"

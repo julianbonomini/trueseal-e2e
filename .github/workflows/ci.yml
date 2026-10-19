@@ -50,12 +50,34 @@ jobs:
           - lane: relay-privacy
             os: ubuntu-latest
             command: node scripts/run-privacy.mjs --mode gate
-          - lane: rust-typescript
+          # The Interop Smoke (E2E-4 / G2): every SDK pair, same-SDK pairs
+          # included, both sides acting as admitter. Topology (scripts/
+          # run-interop.mjs documents it): Swift is macOS-only, the Kotlin
+          # JVM lane's pinned artifact is Linux-only, and the harness is
+          # single-host — so pairs land on the one runner OS that hosts
+          # both (swift-kotlin builds the pinned core's cdylib from source
+          # on macOS; the pinned INPUT is the same SHA).
+          - lane: interop-ts-ts
             os: ubuntu-latest
-            command: node scripts/run-interop.mjs rust --mode gate
-          - lane: swift-typescript
+            command: node scripts/run-interop.mjs ts-ts --mode gate
+          - lane: interop-ts-kotlin
+            os: ubuntu-latest
+            command: node scripts/run-interop.mjs ts-kotlin --mode gate
+            java: true
+          - lane: interop-kotlin-kotlin
+            os: ubuntu-latest
+            command: node scripts/run-interop.mjs kotlin-kotlin --mode gate
+            java: true
+          - lane: interop-swift-swift
             os: macos-latest
-            command: node scripts/run-interop.mjs swift --mode gate
+            command: node scripts/run-interop.mjs swift-swift --mode gate
+          - lane: interop-ts-swift
+            os: macos-latest
+            command: node scripts/run-interop.mjs ts-swift --mode gate
+          - lane: interop-swift-kotlin
+            os: macos-latest
+            command: node scripts/run-interop.mjs swift-kotlin --mode gate
+            java: true
 
     steps:
       - name: Checkout E2E harness
@@ -71,14 +93,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Set up JDK 17 (Kotlin Scenario Driver lane)
-        if: matrix.java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up JDK 17 (Kotlin Scenario Driver lane)
+      - name: Set up JDK 17 (Kotlin driver lanes)
         if: matrix.java
         uses: actions/setup-java@v4
         with:
@@ -104,6 +119,17 @@ jobs:
         with:
           name: g7-privacy-evidence
           path: gates/evidence/g7-privacy-*.json
+          if-no-files-found: error
+
+      # G2 Release Evidence (E2E-4 completion criterion: "Results are
+      # recorded per pair for Release Evidence"). Missing evidence is an
+      # error, not a skip.
+      - name: Upload G2 interop evidence
+        if: startsWith(matrix.lane, 'interop-')
+        uses: actions/upload-artifact@v7
+        with:
+          name: g2-interop-${{ matrix.lane }}
+          path: gates/evidence/g2-interop-*.json
           if-no-files-found: error
 
   dev:
@@ -136,15 +162,37 @@ jobs:
             os: ubuntu-latest
             command: node scripts/run-privacy.mjs --mode dev
             needs_ts: true
-          - lane: rust-typescript
+          - lane: interop-ts-ts
             os: ubuntu-latest
-            command: node scripts/run-interop.mjs rust --mode dev
+            command: node scripts/run-interop.mjs ts-ts --mode dev
             needs_ts: true
-          - lane: swift-typescript
+          - lane: interop-ts-kotlin
+            os: ubuntu-latest
+            command: node scripts/run-interop.mjs ts-kotlin --mode dev
+            needs_ts: true
+            needs_kotlin: true
+            java: true
+          - lane: interop-kotlin-kotlin
+            os: ubuntu-latest
+            command: node scripts/run-interop.mjs kotlin-kotlin --mode dev
+            needs_kotlin: true
+            java: true
+          - lane: interop-swift-swift
             os: macos-latest
-            command: node scripts/run-interop.mjs swift --mode dev
+            command: node scripts/run-interop.mjs swift-swift --mode dev
+            needs_swift: true
+          - lane: interop-ts-swift
+            os: macos-latest
+            command: node scripts/run-interop.mjs ts-swift --mode dev
             needs_ts: true
             needs_swift: true
+          - lane: interop-swift-kotlin
+            os: macos-latest
+            command: node scripts/run-interop.mjs swift-kotlin --mode dev
+            needs_ts: true
+            needs_kotlin: true
+            needs_swift: true
+            java: true
 
     steps:
       - name: Checkout E2E harness
@@ -195,6 +243,13 @@ jobs:
           cache-dependency-path: trueseal-relay/go.sum
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up JDK 17 (Kotlin driver lanes)
+        if: matrix.java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Run ${{ matrix.lane }} (DEV MODE — non-gating)
         working-directory: trueseal-e2e
