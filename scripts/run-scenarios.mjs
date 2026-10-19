@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  buildAdversary,
+  buildHostileRelay,
   buildRelay,
   buildTypeScriptSdk,
   parseMode,
@@ -21,6 +23,8 @@ const layout = prepareWorkspace(mode)
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const artifacts = mkdtempSync(join(tmpdir(), `trueseal-e2e-${sdk}-build-`))
 const relayBin = join(artifacts, 'trueseal-relay')
+const hostileRelayBin = join(artifacts, 'trueseal-relay-hostile')
+const adversaryBin = join(artifacts, 'trueseal-e2e-adversary')
 const duplicateInboxBin = join(artifacts, 'duplicate-inbox')
 
 process.on('exit', () => {
@@ -44,10 +48,16 @@ assertProtocolMatchesSharedFacts(layout)
 
 if (sdk === 'ts') buildTypeScriptSdk(layout.tsRepo, run)
 buildRelay(layout.relayRepo, relayBin, run)
+// G3 (E2E-5): every suite lane also builds the Hostile Relay (tagged) and
+// the Adversary Client (pinned core via the tree-internal path dep) — a
+// lane that cannot build them fails, never silently skips the gate rows.
+buildHostileRelay(layout.relayRepo, hostileRelayBin, run)
+buildAdversary(layout.rustClientDir, adversaryBin, run)
 run('go', ['build', '-o', duplicateInboxBin, '.'], join(layout.e2eRepo, 'scripts'))
 driver.build(layout, run, artifacts)
 
 execFileSync(resolve(relayBin), ['-h'], { stdio: 'ignore' })
+execFileSync(resolve(hostileRelayBin), ['-h'], { stdio: 'ignore' })
 
 const layoutJson = JSON.stringify({
   e2eRepo: layout.e2eRepo,
@@ -65,6 +75,8 @@ run(
   {
     TRUESEAL_E2E_SDK: sdk,
     TRUESEAL_RELAY_BIN: resolve(relayBin),
+    TRUESEAL_HOSTILE_RELAY_BIN: resolve(hostileRelayBin),
+    TRUESEAL_ADVERSARY_BIN: resolve(adversaryBin),
     TRUESEAL_DUPLICATE_INBOX_BIN: resolve(duplicateInboxBin),
     TRUESEAL_TS_REPO: layout.tsRepo,
     TRUESEAL_E2E_LAYOUT: layoutJson,

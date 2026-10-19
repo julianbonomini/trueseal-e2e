@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/ecdh"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -24,7 +25,7 @@ import (
 
 func main() {
 	if len(os.Args) < 3 || len(os.Args) > 4 {
-		fmt.Fprintln(os.Stderr, "usage: duplicate-inbox <duplicate|wait-queued|wait-empty|max-id> <sqlite-path> [after-id]")
+		fmt.Fprintln(os.Stderr, "usage: duplicate-inbox <duplicate|wait-queued|wait-empty|max-id|device-key> <sqlite-path> [after-id]")
 		os.Exit(2)
 	}
 
@@ -50,6 +51,8 @@ func main() {
 		waitEmpty(db, waitTimeout())
 	case "max-id":
 		fmt.Println(maxID(db))
+	case "device-key":
+		deviceKey(db)
 	default:
 		fatal(fmt.Errorf("unknown command %q", os.Args[1]))
 	}
@@ -64,6 +67,25 @@ func maxID(db *sql.DB) int64 {
 		fatal(err)
 	}
 	return id.Int64
+}
+
+// deviceKey prints the hex X25519 public key of the identity stored in a
+// CLIENT's session-state database (E2E-5): the Adversary Client's crafted
+// envelopes are addressed to a victim Device by noise public key, and the
+// canonical SDK API deliberately never exposes raw keys — the harness reads
+// its own fixture store instead (the same class as reading the relay's
+// inbox). The store keeps the noise SECRET; the public key is derived with
+// the standard library's X25519.
+func deviceKey(db *sql.DB) {
+	var secret []byte
+	if err := db.QueryRow(`SELECT noise_secret FROM identity WHERE id = 1`).Scan(&secret); err != nil {
+		fatal(err)
+	}
+	priv, err := ecdh.X25519().NewPrivateKey(secret)
+	if err != nil {
+		fatal(err)
+	}
+	fmt.Printf("%x\n", priv.PublicKey().Bytes())
 }
 
 // firstNewerThan returns the id of the oldest row newer than the watermark,

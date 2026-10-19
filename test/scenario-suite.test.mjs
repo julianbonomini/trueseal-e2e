@@ -15,6 +15,7 @@ import { runTtl } from '../scenarios/ttl.mjs'
 import { runLimits } from '../scenarios/limits.mjs'
 import { runVersions } from '../scenarios/versions.mjs'
 import { runUpgrades } from '../scenarios/upgrades.mjs'
+import { runAdversary } from '../scenarios/adversary.mjs'
 import { TS_ONLY_SCENARIOS } from '../scenarios/ts-only.mjs'
 
 // The Scenario Suite (G1): one shared Scenario Driver runs the same
@@ -23,6 +24,8 @@ import { TS_ONLY_SCENARIOS } from '../scenarios/ts-only.mjs'
 const sdkName = process.env.TRUESEAL_E2E_SDK
 const driver = sdkDriver(sdkName)
 const relayBinary = resolve(process.env.TRUESEAL_RELAY_BIN)
+const hostileRelayBinary = resolve(process.env.TRUESEAL_HOSTILE_RELAY_BIN)
+const adversaryBinary = resolve(process.env.TRUESEAL_ADVERSARY_BIN)
 const duplicateInbox = resolve(process.env.TRUESEAL_DUPLICATE_INBOX_BIN)
 const layout = JSON.parse(process.env.TRUESEAL_E2E_LAYOUT)
 const root = mkdtempSync(join(tmpdir(), `trueseal-e2e-suite-${sdkName}-`))
@@ -57,6 +60,29 @@ test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { t
      *  relay is stopped) — e.g. the G6 committed store fixture. */
     spawnRelay(stateDir, extraEnv = {}) {
       return new RelayProcess({ binary: relayBinary, stateDir, extraEnv })
+    },
+    /** The Hostile Relay (RELAY-14): the same pinned relay built with the
+     *  `hostile` tag, control listener on 127.0.0.1:7703. Same port rule:
+     *  only while the main relay is stopped. */
+    spawnHostileRelay(stateDir, extraEnv = {}) {
+      return new RelayProcess({ binary: hostileRelayBinary, stateDir, extraEnv, hostile: true })
+    },
+    /** The Adversary Client (E2E-5): the hostile-traffic lane. Speaks the
+     *  driver line protocol (plus adversary-only commands) so DriverProcess
+     *  handles it unmodified. */
+    async spawnAdversary(name, targetRelay) {
+      const stateDir = join(root, name)
+      mkdirSync(stateDir, { recursive: true })
+      const { DriverProcess } = await import('../lib/driver-process.mjs')
+      const process = new DriverProcess({
+        command: adversaryBinary,
+        args: ['--state-dir', stateDir, '--relay-host', '127.0.0.1', '--relay-pub', targetRelay.publicKey],
+        name,
+      })
+      await process.start()
+      process.stateDir = stateDir
+      clients.push(process)
+      return process
     },
     /** Spawns a driver WITHOUT opening a session (the storeTooNew row
      *  must drive `open` itself to catch the typed failure). */
@@ -133,6 +159,10 @@ test(`scenario suite: ${sdkName} driver through the shared Scenario Driver`, { t
     await runModule(runLimits)
     await runModule(runVersions)
     await runModule(runUpgrades)
+    // G3 last: the adversary scenario stops the shared relay and runs its
+    // own (hostile) relay instances, so its held/injected rows can never
+    // poison another module's drain assertions.
+    await runModule(runAdversary)
 
     if (driver.capabilities.includes(TS_ONLY_SCENARIOS.requiredCapability)) {
       await runModule(TS_ONLY_SCENARIOS.run)

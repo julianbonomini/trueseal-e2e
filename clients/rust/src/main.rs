@@ -1,91 +1,53 @@
+//! The Adversary Client (E2E-5, e2e ADR-0001 "Adversarial harness").
+//!
+//! A test-only hostile client built on the pinned trueseal-sync core crates.
+//! Where the SDK Scenario Drivers map 1:1 onto the public SDK API (and must
+//! never grow envelope crafting — Protocol v1), this binary is the lane that
+//! crafts hostile-but-well-formed protocol traffic:
+//!
+//! - envelopes with tampered End-to-End Versions (newer / older / malformed);
+//! - corrupted ciphertexts and unknown frame types;
+//! - replayed envelope bytes (re-pushed verbatim);
+//! - unauthorized Group Manifests (signed by a key the group never admitted);
+//! - oversized pushes past the relay's size ceiling;
+//! - wrong Transport Version prefixes.
+//!
+//! It can also join a group as a REAL member (a `TruesealSession` over its
+//! own persisted `DeviceKeypair`) — the hostile-member role: admitted by the
+//! group, still holding its private keys, so it can craft member-signed
+//! envelopes with hostile parameters.
+//!
+//! Control protocol: newline-delimited JSON on stdin/stdout, the same
+//! request/response + event shape as the SDK Scenario Drivers
+//! (docs/scenario-driver-protocol.md), plus adversary-only commands the SDK
+//! drivers deliberately do not have.
+
 use std::env;
-use std::io::{self, BufRead, Write};
-use std::sync::Arc;
+use std::io::{self, BufRead, Read, Write};
+use std::net::TcpStream;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use base64::prelude::*;
 use serde_json::{json, Value};
-use trueseal_sync::ffi::{
-    ConnectionChangedCallback, GroupDestroyedCallback, MemberJoinedCallback, MemberLeftCallback,
-    MemberRequestCallback, MessageCallback, RemovedFromGroupCallback, TruesealFfiSession,
-};
+use trueseal_sync::connection::ConnectionFactory;
+use trueseal_sync::device::DeviceKeypair;
+use trueseal_sync::envelope::{Envelope, SigningKeypair};
+use trueseal_sync::keys::NoisePublicKey;
+use trueseal_sync::manifest::{GroupManifest, ManifestMember};
+use trueseal_sync::message::Message;
+use trueseal_sync::relay::{push_send, RelayError};
+use trueseal_sync::session::{ConnectionChange, TruesealSession};
+use trueseal_sync::store::{PersistentLog, Store};
+use trueseal_sync::version::{END_TO_END_VERSION, TRANSPORT_VERSION};
+
+// ── Protocol plumbing ────────────────────────────────────────────────────────
 
 fn emit(value: Value) {
     let stdout = io::stdout();
     let mut out = stdout.lock();
     serde_json::to_writer(&mut out, &value).expect("serialize event");
     writeln!(out).expect("write event");
-}
-
-struct Messages;
-impl MessageCallback for Messages {
-    fn on_message(&self, blob: Vec<u8>, sender_noise_pub: Vec<u8>, message_id: String) {
-        emit(json!({
-            "event": "message",
-            "text": String::from_utf8_lossy(&blob),
-            "data": BASE64_STANDARD.encode(&blob),
-            "senderId": BASE64_URL_SAFE_NO_PAD.encode(sender_noise_pub),
-            "messageId": message_id,
-        }));
-    }
-}
-
-struct Removed;
-impl RemovedFromGroupCallback for Removed {
-    fn on_removed_from_group(&self) {
-        emit(json!({ "event": "removedFromGroup" }));
-    }
-}
-
-struct Destroyed;
-impl GroupDestroyedCallback for Destroyed {
-    fn on_group_destroyed(&self) {
-        emit(json!({ "event": "groupDestroyed" }));
-    }
-}
-
-struct Connection;
-impl ConnectionChangedCallback for Connection {
-    fn on_connection_changed(&self, connected: bool) {
-        emit(json!({ "event": "connectionChanged", "connected": connected }));
-    }
-}
-
-struct Requests;
-impl MemberRequestCallback for Requests {
-    fn on_member_request(&self, token: String, name: String) {
-        emit(json!({ "event": "memberRequest", "requestToken": token, "name": name }));
-    }
-}
-
-struct Joined;
-impl MemberJoinedCallback for Joined {
-    fn on_member_joined(&self, member_id: String, member_name: String) {
-        emit(json!({
-            "event": "memberJoined",
-            "member": { "id": member_id, "name": member_name },
-        }));
-    }
-}
-
-struct Left;
-impl MemberLeftCallback for Left {
-    fn on_member_left(&self, member_id: String, member_name: String) {
-        emit(json!({
-            "event": "memberLeft",
-            "member": { "id": member_id, "name": member_name },
-        }));
-    }
-}
-
-fn argument(name: &str) -> String {
-    let args: Vec<String> = env::args().collect();
-    let index = args
-        .iter()
-        .position(|arg| arg == name)
-        .unwrap_or_else(|| panic!("missing {name}"));
-    args.get(index + 1)
-        .cloned()
-        .unwrap_or_else(|| panic!("missing {name}"))
 }
 
 fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
@@ -100,51 +62,406 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-fn execute(session: &Arc<TruesealFfiSession>, message: &Value) -> Result<Value, String> {
+fn encode_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn decode_hex_32(value: &str) -> Result<[u8; 32], String> {
+    let bytes = decode_hex(value)?;
+    <[u8; 32]>::try_from(bytes.as_slice()).map_err(|_| "expected 32 bytes".to_string())
+}
+
+fn argument(name: &str) -> String {
+    let args: Vec<String> = env::args().collect();
+    let index = args
+        .iter()
+        .position(|arg| arg == name)
+        .unwrap_or_else(|| panic!("missing {name}"));
+    args.get(index + 1)
+        .cloned()
+        .unwrap_or_else(|| panic!("missing {name}"))
+}
+
+// ── Identity ─────────────────────────────────────────────────────────────────
+
+/// The adversary's identity lives in the core's own Store (namespace
+/// "adversary") — the SAME persistence the session uses, so the crafter and
+/// the member session always sign as one identity, and a restarted adversary
+/// keeps its membership (a member's keys ARE its authority — ADR-0027).
+struct Identity {
+    keypair: DeviceKeypair,
+    signing_priv: [u8; 32],
+}
+
+fn identity(state_dir: &str, fresh: bool) -> Result<Identity, String> {
+    if fresh {
+        let _ = std::fs::remove_file(
+            std::path::Path::new(state_dir).join("trueseal_adversary.db"),
+        );
+    }
+    let store = Store::open(std::path::Path::new(state_dir), "adversary").map_err(|e| e.to_string())?;
+    let keypair = match store.load_keypair().map_err(|e| e.to_string())? {
+        Some(keypair) if !fresh => keypair,
+        _ => {
+            let keypair = DeviceKeypair::generate();
+            store.save_keypair(&keypair).map_err(|e| e.to_string())?;
+            keypair
+        }
+    };
+    let signing_priv = keypair.signing.to_bytes();
+    Ok(Identity { keypair, signing_priv })
+}
+
+// ── Member role: a real session over the adversary's own keypair ─────────────
+//
+// The session type carries the concrete transport; a process-global slot is
+// fine because a scenario drives one adversary at a time.
+
+static SESSION: OnceLock<Arc<TruesealSession<TcpStream>>> = OnceLock::new();
+
+fn session() -> Result<&'static Arc<TruesealSession<TcpStream>>, String> {
+    SESSION.get().ok_or_else(|| "no session — open first".to_string())
+}
+
+fn open_session(
+    state_dir: &str,
+    relay_host: &str,
+    relay_pub: [u8; 32],
+) -> Result<Value, String> {
+    // The FULL session (store + outbox pump + reconnect), mirroring the
+    // CLI's construction: the bare connect_tcp constructor has no pump, so
+    // control-plane messages (the Pair that joinGroup queues — ADR-0026's
+    // control plane through the outbox) would never leave.
+    let id = identity(state_dir, false)?;
+    let noise_pub = id.keypair.public_key().0;
+    let signing_pub = id.keypair.signing_public_key().0;
+    let store = Store::open(std::path::Path::new(state_dir), "adversary").map_err(|e| e.to_string())?;
+    let manifest_slot: Arc<Mutex<Option<GroupManifest>>> =
+        Arc::new(Mutex::new(store.load_group_manifest().map_err(|e| e.to_string())?));
+    let op_log = Box::new(PersistentLog::new(
+        Store::open(std::path::Path::new(state_dir), "adversary").map_err(|e| e.to_string())?,
+    ));
+    let factory =
+        ConnectionFactory::new(format!("{relay_host}:7700"), format!("{relay_host}:7701"));
+    let (transport_factory, push_factory) = factory.into_factories();
+    let on_message = |message: Message, sender: [u8; 32], sequence: u64| {
+        let (kind, body) = match &message {
+            Message::Sync { body } => ("sync", Some(body.clone())),
+            Message::Pair { .. } => ("pair", None),
+            Message::Revoke => ("revoke", None),
+            Message::GroupManifest { .. } => ("groupManifest", None),
+        };
+        emit(json!({
+            "event": "message",
+            "kind": kind,
+            "data": body.map(|b| BASE64_STANDARD.encode(b)),
+            "senderId": encode_hex(&sender),
+            "sequence": sequence,
+        }));
+    };
+    let session = TruesealSession::<TcpStream>::connect_background(
+        NoisePublicKey(relay_pub),
+        id.keypair,
+        on_message,
+        op_log,
+        manifest_slot,
+        || emit(json!({ "event": "removedFromGroup" })),
+        |_| emit(json!({ "event": "manifestChanged" })),
+        || emit(json!({ "event": "groupDestroyed" })),
+        transport_factory,
+        push_factory,
+        None,
+        Some(Box::new(|change: ConnectionChange| {
+            emit(json!({
+                "event": "connectionChanged",
+                "connected": matches!(change, ConnectionChange::Connected),
+            }));
+        })),
+    )
+    .map_err(|e| e.to_string())?;
+    let session = Arc::new(session);
+    session.subscribe_delivery_issues(|issue| {
+        use trueseal_sync::delivery_issue::{DeliveryIssue, UnreadableReason};
+        let value = match issue {
+            DeliveryIssue::Unreadable(reason) => json!({
+                "type": "unreadable",
+                "reason": match reason {
+                    UnreadableReason::Malformed => "malformed",
+                    UnreadableReason::SenderOutdated => "senderOutdated",
+                    UnreadableReason::Expired => "expired",
+                    UnreadableReason::DroppedWhileHeld => "droppedWhileHeld",
+                },
+            }),
+            DeliveryIssue::HeldForUpgrade(v) => json!({ "type": "heldForUpgrade", "version": v }),
+            DeliveryIssue::SendFailed { message_id, .. } => {
+                json!({ "type": "sendFailed", "messageId": message_id })
+            }
+            DeliveryIssue::Unauthorized => json!({ "type": "unauthorized" }),
+            other => json!({ "type": format!("{other:?}") }),
+        };
+        emit(json!({ "event": "deliveryIssue", "issue": value }));
+    });
+    SESSION
+        .set(session)
+        .map_err(|_| "session already open".to_string())?;
+    Ok(json!({
+        "noisePub": encode_hex(&noise_pub),
+        "signingPub": encode_hex(&signing_pub),
+    }))
+}
+
+// ── Wire crafting ────────────────────────────────────────────────────────────
+
+/// Frame layout (relay ADR-0008): [msg type: 1][body length: 4 BE][body].
+/// Hand-rolled here because the core's `frame` is crate-private — the
+/// adversary must be able to emit frames the library never would.
+fn frame(msg_type: u8, body: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(5 + body.len());
+    out.push(msg_type);
+    out.extend_from_slice(&(body.len() as u32).to_be_bytes());
+    out.extend_from_slice(body);
+    out
+}
+
+/// Push body layout (relay ADR-0008): [recipient_pub: 32][envelope proto].
+fn push_frame_for(recipient: &[u8; 32], envelope_bytes: &[u8]) -> Vec<u8> {
+    let mut body = Vec::with_capacity(32 + envelope_bytes.len());
+    body.extend_from_slice(recipient);
+    body.extend_from_slice(envelope_bytes);
+    frame(0x01, &body) // MsgType::Push
+}
+
+fn relay_error_outcome(error: RelayError) -> Value {
+    match error {
+        RelayError::PushRejected(refusal) => {
+            json!({ "outcome": "refused", "refusal": format!("{refusal:?}") })
+        }
+        RelayError::EnvelopeTooLarge => {
+            json!({ "outcome": "refused", "refusal": "envelopeTooLarge(local backstop)" })
+        }
+        RelayError::RelayVersionUnsupported { min, max } => {
+            json!({ "outcome": "versionUnsupported", "min": min, "max": max })
+        }
+        other => json!({ "outcome": "error", "error": other.to_string() }),
+    }
+}
+
+fn raw_push(relay_host: &str, relay_pub: [u8; 32], frame_bytes: Vec<u8>) -> Value {
+    let addr = format!("{relay_host}:7701");
+    let stream = match TcpStream::connect(&addr) {
+        Ok(stream) => stream,
+        Err(error) => return json!({ "outcome": "error", "error": error.to_string() }),
+    };
+    // push_send requires a non-blocking transport (the version exchange
+    // enforces its timeout through WouldBlock retries).
+    if let Err(error) = stream.set_nonblocking(true) {
+        return json!({ "outcome": "error", "error": error.to_string() });
+    }
+    match push_send(stream, relay_pub, frame_bytes) {
+        Ok(()) => json!({ "outcome": "ack" }),
+        Err(error) => relay_error_outcome(error),
+    }
+}
+
+/// `craftAndPush`: build a sealed envelope to `recipient` (Sync body or a
+/// verbatim encoded `Message`), optionally tamper the plaintext version
+/// field, and push it over a fresh NK session. Returns the exact frame bytes
+/// so the harness can replay them or hand them to the Hostile Relay's
+/// `inject`.
+fn craft_and_push(
+    state_dir: &str,
+    relay_host: &str,
+    relay_pub: [u8; 32],
+    message: &Value,
+) -> Result<Value, String> {
+    let recipient = decode_hex_32(message["recipient"].as_str().ok_or("missing recipient")?)?;
+    let id = identity(state_dir, message["freshIdentity"].as_bool().unwrap_or(false))?;
+    let signing = SigningKeypair::from_signing_key(ed25519_dalek::SigningKey::from_bytes(
+        &id.signing_priv,
+    ));
+
+    let encoded_message = if let Some(hex) = message["messageHex"].as_str() {
+        decode_hex(hex)?
+    } else {
+        let body = decode_hex(message["bodyHex"].as_str().ok_or("missing bodyHex")?)?;
+        Message::Sync { body }.encode()
+    };
+
+    let sequence = message["sequence"].as_u64().unwrap_or(1);
+    let timestamp = message["senderTimestampMs"]
+        .as_u64()
+        .unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0)
+        });
+    let mut envelope = Envelope::build_sealed(
+        sequence,
+        Vec::new(),
+        NoisePublicKey(recipient),
+        &signing,
+        timestamp,
+        &encoded_message,
+    );
+    if message["corruptPayload"].as_bool().unwrap_or(false) {
+        // Flip one byte inside the sealed payload (the AEAD ciphertext) —
+        // the frame and proto stay well-formed; only the seal fails.
+        let mid = envelope.payload.len() / 2;
+        envelope.payload[mid] ^= 0x01;
+    }
+    let mut envelope_bytes = envelope.encode();
+    if let Some(version) = message["version"].as_u64() {
+        // The End-to-End Version is a plaintext proto field checked BEFORE
+        // decryption (ADR-0022) — tampering it post-seal is exactly what a
+        // wrong-version blob from the wild looks like.
+        let mut tampered = Envelope::decode(&envelope_bytes).map_err(|e| e.to_string())?;
+        tampered.version = version as u32;
+        envelope_bytes = tampered.encode();
+    }
+    let frame_bytes = push_frame_for(&recipient, &envelope_bytes);
+    let mut result = raw_push(relay_host, relay_pub, frame_bytes.clone());
+    result["frameHex"] = json!(encode_hex(&frame_bytes));
+    result["envelopeHex"] = json!(encode_hex(&envelope_bytes));
+    Ok(result)
+}
+
+/// `pushFrame`: push verbatim frame bytes (malformed / unknown-type rows).
+fn push_frame(relay_host: &str, relay_pub: [u8; 32], message: &Value) -> Result<Value, String> {
+    let frame_bytes = decode_hex(message["frameHex"].as_str().ok_or("missing frameHex")?)?;
+    Ok(raw_push(relay_host, relay_pub, frame_bytes))
+}
+
+/// `transportProbe`: speak only the Transport Version prefix
+/// ("TSP" || u16 BE, ADR-0022) and report the relay's plaintext reply. No
+/// Noise handshake — a wrong-version client never gets that far.
+fn transport_probe(relay_host: &str, message: &Value) -> Result<Value, String> {
+    let version = message["version"].as_u64().ok_or("missing version")? as u16;
+    let addr = format!("{relay_host}:7700");
+    let mut stream = TcpStream::connect(&addr).map_err(|e| e.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .map_err(|e| e.to_string())?;
+    let mut prefix = b"TSP".to_vec();
+    prefix.extend_from_slice(&version.to_be_bytes());
+    stream.write_all(&prefix).map_err(|e| e.to_string())?;
+    let mut reply = Vec::new();
+    let mut buf = [0u8; 256];
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match stream.read(&mut buf) {
+            Ok(0) => break, // closed — a refusal ends the connection
+            Ok(n) => reply.extend_from_slice(&buf[..n]),
+            Err(error)
+                if error.kind() == io::ErrorKind::WouldBlock
+                    || error.kind() == io::ErrorKind::TimedOut =>
+            {
+                if Instant::now() >= deadline {
+                    break;
+                }
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+        if reply.ends_with(b"\n") {
+            break;
+        }
+    }
+    Ok(json!({
+        "replyHex": encode_hex(&reply),
+        "replyText": String::from_utf8_lossy(&reply),
+    }))
+}
+
+/// `craftManifest`: a GroupManifest signed by the adversary's own key —
+/// unauthorized unless the group admitted that key (ADR-0027's
+/// unknown-issuer / group-id checks are the client's defense). Returns the
+/// encoded `Message` for `craftAndPush` or the Hostile Relay's `inject`.
+fn craft_manifest(state_dir: &str, message: &Value) -> Result<Value, String> {
+    let group_id = decode_hex_32(message["groupId"].as_str().ok_or("missing groupId")?)?;
+    let version = message["version"].as_u64().ok_or("missing version")?;
+    let id = identity(state_dir, false)?;
+    let signing = ed25519_dalek::SigningKey::from_bytes(&id.signing_priv);
+    let members: Vec<ManifestMember> = message["members"]
+        .as_array()
+        .ok_or("missing members")?
+        .iter()
+        .map(|member| {
+            Ok(ManifestMember {
+                noise_pub: trueseal_sync::keys::NoisePublicKey(decode_hex_32(
+                    member["noisePub"].as_str().ok_or("missing noisePub")?,
+                )?),
+                signing_pub: trueseal_sync::keys::SigningPublicKey(decode_hex_32(
+                    member["signingPub"].as_str().ok_or("missing signingPub")?,
+                )?),
+                name: member["name"].as_str().unwrap_or("adversary").to_owned(),
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    // GroupManifest::new signs with the caller's key and sets parent=None.
+    // A hostile manifest's CONTENT (a version jump past the bound, a foreign
+    // group id, an unknown issuer) is what the client must reject — the
+    // signature itself is valid.
+    let manifest = GroupManifest::new(group_id, version, members, &signing);
+    let encoded = Message::GroupManifest { manifest }.encode();
+    Ok(json!({ "messageHex": encode_hex(&encoded) }))
+}
+
+// ── Command dispatch ─────────────────────────────────────────────────────────
+
+fn execute(state_dir: &str, relay_host: &str, relay_pub: [u8; 32], message: &Value) -> Result<Value, String> {
     let command = message["command"].as_str().ok_or("missing command")?;
     match command {
-        "pairingToken" => Ok(json!(session.pairing_token())),
+        "info" => Ok(json!({
+            // The Adversary Client is not an SDK; it reports the pinned
+            // core's facts so the harness handshake passes.
+            "sdkVersion": "adversary",
+            "transportVersion": TRANSPORT_VERSION,
+            "endToEndVersion": END_TO_END_VERSION,
+            "maxPayloadBytes": trueseal_sync::limits::PROTOCOL_SIZE_LIMIT,
+            "maxGroupSize": 32,
+        })),
+        "keypair" => {
+            let fresh = message["fresh"].as_bool().unwrap_or(false);
+            let id = identity(state_dir, fresh)?;
+            Ok(json!({
+                "noisePub": encode_hex(&id.keypair.public_key().0),
+                "signingPub": encode_hex(&id.keypair.signing_public_key().0),
+            }))
+        }
+        "open" => open_session(state_dir, relay_host, relay_pub),
         "joinGroup" => {
-            session
-                .join_group(message["token"].as_str().ok_or("missing token")?.to_owned())
-                .map_err(|error| error.to_string())?;
+            let token = message["token"].as_str().ok_or("missing token")?;
+            session()?
+                .join_group(token)
+                .map_err(|e| e.to_string())?;
             Ok(Value::Null)
         }
-        "acceptPairingRequest" => Ok(json!(session.accept_member(
-            message["requestToken"]
-                .as_str()
-                .ok_or("missing requestToken")?
-                .to_owned()
-        ))),
-        "cancelPairing" => {
-            session.cancel_pairing();
-            Ok(Value::Null)
-        }
+        "groupStatus" => Ok(json!(format!("{:?}", session()?.group_status()))),
+        "pairingToken" => Ok(json!(session()?.pairing_token().map_err(|e| e.to_string())?)),
+        "acceptMember" => Ok(json!(session()?
+            .accept_member(message["token"].as_str().ok_or("missing token")?)
+            .map_err(|e| e.to_string())?)),
+        // The canonical Member shape is {id, name} — raw keys are what the
+        // harness's device-key helper reads from the fixture store.
+        "members" => Ok(json!(session()?
+            .members()
+            .into_iter()
+            .map(|member| json!({ "id": member.id, "name": member.name }))
+            .collect::<Vec<_>>())),
         "send" => {
             let data = BASE64_STANDARD
                 .decode(message["data"].as_str().ok_or("missing data")?)
-                .map_err(|error| error.to_string())?;
-            session.send(data).map_err(|error| error.to_string())?;
-            Ok(Value::Null)
+                .map_err(|e| e.to_string())?;
+            Ok(json!(session()?.push_sync(data).map_err(|e| e.to_string())?))
         }
-        "members" => Ok(json!(session
-            .members()
-            .into_iter()
-            .map(|member| { json!({ "id": member.id, "name": member.name }) })
-            .collect::<Vec<_>>())),
-        "removeMember" => {
-            session
-                .remove_member(
-                    message["memberId"]
-                        .as_str()
-                        .ok_or("missing memberId")?
-                        .to_owned(),
-                )
-                .map_err(|error| error.to_string())?;
-            Ok(Value::Null)
-        }
-        "destroyGroup" => {
-            session.destroy_group();
+        "craftAndPush" => craft_and_push(state_dir, relay_host, relay_pub, message),
+        "pushFrame" => push_frame(relay_host, relay_pub, message),
+        "transportProbe" => transport_probe(relay_host, message),
+        "craftManifest" => craft_manifest(state_dir, message),
+        "close" => {
+            if let Some(session) = SESSION.get() {
+                session.close();
+            }
             Ok(Value::Null)
         }
         _ => Err(format!("unknown command: {command}")),
@@ -152,28 +469,11 @@ fn execute(session: &Arc<TruesealFfiSession>, message: &Value) -> Result<Value, 
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let session = TruesealFfiSession::create(
-        argument("--state-dir"),
-        "e2e".into(),
-        argument("--relay-host"),
-        decode_hex(&argument("--relay-pub"))?,
-        Box::new(Messages),
-        Box::new(Removed),
-        Box::new(Destroyed),
-        Some(Box::new(Connection)),
-    )?;
-    session.set_on_member_request(Box::new(Requests));
-    session.set_on_member_joined(Box::new(Joined));
-    session.set_on_member_left(Box::new(Left));
+    let state_dir = argument("--state-dir");
+    let relay_host = argument("--relay-host");
+    let relay_pub = decode_hex_32(&argument("--relay-pub"))?;
 
-    emit(json!({
-        "event": "ready",
-        "localNodeId": session.local_node_id(),
-        "localDeviceName": session.local_device_name(),
-        "members": session.members().into_iter().map(|member| {
-            json!({ "id": member.id, "name": member.name })
-        }).collect::<Vec<_>>(),
-    }));
+    emit(json!({ "event": "ready" }));
 
     for line in io::stdin().lock().lines() {
         let line = line?;
@@ -188,7 +488,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         let id = message.get("id").cloned().unwrap_or(Value::Null);
-        match execute(&session, &message) {
+        match execute(&state_dir, &relay_host, relay_pub, &message) {
             Ok(result) => emit(json!({ "id": id, "ok": true, "result": result })),
             Err(error) => emit(json!({ "id": id, "ok": false, "error": error })),
         }
