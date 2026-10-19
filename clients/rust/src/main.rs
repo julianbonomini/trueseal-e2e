@@ -30,13 +30,15 @@ use std::time::{Duration, Instant};
 
 use base64::prelude::*;
 use serde_json::{json, Value};
+use trueseal_sync::connection::ConnectionFactory;
 use trueseal_sync::device::DeviceKeypair;
 use trueseal_sync::envelope::{Envelope, SigningKeypair};
 use trueseal_sync::keys::NoisePublicKey;
 use trueseal_sync::manifest::{GroupManifest, ManifestMember};
 use trueseal_sync::message::Message;
 use trueseal_sync::relay::{push_send, RelayError};
-use trueseal_sync::session::TruesealSession;
+use trueseal_sync::session::{ConnectionChange, TruesealSession};
+use trueseal_sync::store::{PersistentLog, Store};
 use trueseal_sync::version::{END_TO_END_VERSION, TRANSPORT_VERSION};
 
 // ── Protocol plumbing ────────────────────────────────────────────────────────
@@ -82,36 +84,31 @@ fn argument(name: &str) -> String {
 
 // ── Identity ─────────────────────────────────────────────────────────────────
 
-/// The adversary's persisted identity: `noise_priv || signing_priv` (hex) in
-/// `<state-dir>/adversary.key`. Persisted so a restarted adversary keeps its
-/// membership (a member's keys ARE its authority — ADR-0027).
+/// The adversary's identity lives in the core's own Store (namespace
+/// "adversary") — the SAME persistence the session uses, so the crafter and
+/// the member session always sign as one identity, and a restarted adversary
+/// keeps its membership (a member's keys ARE its authority — ADR-0027).
 struct Identity {
     keypair: DeviceKeypair,
     signing_priv: [u8; 32],
 }
 
 fn identity(state_dir: &str, fresh: bool) -> Result<Identity, String> {
-    let path = std::path::Path::new(state_dir).join("adversary.key");
-    if !fresh {
-        if let Ok(hex) = std::fs::read_to_string(&path) {
-            let raw = decode_hex(hex.trim())?;
-            if raw.len() == 64 {
-                let noise_priv: [u8; 32] = raw[..32].try_into().map_err(|_| "bad key file")?;
-                let signing_priv: [u8; 32] = raw[32..].try_into().map_err(|_| "bad key file")?;
-                let keypair = DeviceKeypair::from_bytes(noise_priv, signing_priv)
-                    .map_err(|e| e.to_string())?;
-                return Ok(Identity { keypair, signing_priv });
-            }
-        }
+    if fresh {
+        let _ = std::fs::remove_file(
+            std::path::Path::new(state_dir).join("trueseal_adversary.db"),
+        );
     }
-    let keypair = DeviceKeypair::generate();
-    let noise_priv = keypair.noise.private();
+    let store = Store::open(std::path::Path::new(state_dir), "adversary").map_err(|e| e.to_string())?;
+    let keypair = match store.load_keypair().map_err(|e| e.to_string())? {
+        Some(keypair) if !fresh => keypair,
+        _ => {
+            let keypair = DeviceKeypair::generate();
+            store.save_keypair(&keypair).map_err(|e| e.to_string())?;
+            keypair
+        }
+    };
     let signing_priv = keypair.signing.to_bytes();
-    let mut raw = Vec::with_capacity(64);
-    raw.extend_from_slice(&noise_priv);
-    raw.extend_from_slice(&signing_priv);
-    std::fs::create_dir_all(state_dir).map_err(|e| e.to_string())?;
-    std::fs::write(&path, encode_hex(&raw)).map_err(|e| e.to_string())?;
     Ok(Identity { keypair, signing_priv })
 }
 
@@ -131,10 +128,22 @@ fn open_session(
     relay_host: &str,
     relay_pub: [u8; 32],
 ) -> Result<Value, String> {
+    // The FULL session (store + outbox pump + reconnect), mirroring the
+    // CLI's construction: the bare connect_tcp constructor has no pump, so
+    // control-plane messages (the Pair that joinGroup queues — ADR-0026's
+    // control plane through the outbox) would never leave.
     let id = identity(state_dir, false)?;
     let noise_pub = id.keypair.public_key().0;
     let signing_pub = id.keypair.signing_public_key().0;
-    let addr = format!("{relay_host}:7700");
+    let store = Store::open(std::path::Path::new(state_dir), "adversary").map_err(|e| e.to_string())?;
+    let manifest_slot: Arc<Mutex<Option<GroupManifest>>> =
+        Arc::new(Mutex::new(store.load_group_manifest().map_err(|e| e.to_string())?));
+    let op_log = Box::new(PersistentLog::new(
+        Store::open(std::path::Path::new(state_dir), "adversary").map_err(|e| e.to_string())?,
+    ));
+    let factory =
+        ConnectionFactory::new(format!("{relay_host}:7700"), format!("{relay_host}:7701"));
+    let (transport_factory, push_factory) = factory.into_factories();
     let on_message = |message: Message, sender: [u8; 32], sequence: u64| {
         let (kind, body) = match &message {
             Message::Sync { body } => ("sync", Some(body.clone())),
@@ -150,8 +159,26 @@ fn open_session(
             "sequence": sequence,
         }));
     };
-    let session = TruesealSession::connect_tcp(&addr, NoisePublicKey(relay_pub), id.keypair, on_message)
-        .map_err(|e| e.to_string())?;
+    let session = TruesealSession::<TcpStream>::connect_background(
+        NoisePublicKey(relay_pub),
+        id.keypair,
+        on_message,
+        op_log,
+        manifest_slot,
+        || emit(json!({ "event": "removedFromGroup" })),
+        |_| emit(json!({ "event": "manifestChanged" })),
+        || emit(json!({ "event": "groupDestroyed" })),
+        transport_factory,
+        push_factory,
+        None,
+        Some(Box::new(|change: ConnectionChange| {
+            emit(json!({
+                "event": "connectionChanged",
+                "connected": matches!(change, ConnectionChange::Connected),
+            }));
+        })),
+    )
+    .map_err(|e| e.to_string())?;
     let session = Arc::new(session);
     session.subscribe_delivery_issues(|issue| {
         use trueseal_sync::delivery_issue::{DeliveryIssue, UnreadableReason};
@@ -269,7 +296,7 @@ fn craft_and_push(
                 .map(|d| d.as_millis() as u64)
                 .unwrap_or(0)
         });
-    let envelope = Envelope::build_sealed(
+    let mut envelope = Envelope::build_sealed(
         sequence,
         Vec::new(),
         NoisePublicKey(recipient),
@@ -277,6 +304,12 @@ fn craft_and_push(
         timestamp,
         &encoded_message,
     );
+    if message["corruptPayload"].as_bool().unwrap_or(false) {
+        // Flip one byte inside the sealed payload (the AEAD ciphertext) —
+        // the frame and proto stay well-formed; only the seal fails.
+        let mid = envelope.payload.len() / 2;
+        envelope.payload[mid] ^= 0x01;
+    }
     let mut envelope_bytes = envelope.encode();
     if let Some(version) = message["version"].as_u64() {
         // The End-to-End Version is a plaintext proto field checked BEFORE

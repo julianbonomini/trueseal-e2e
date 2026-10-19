@@ -26,6 +26,20 @@ import { hex, textOf } from './lifecycle.mjs'
 const STORE_DB = 'trueseal_e2e.db'
 
 export async function runAdversary(t, ctx) {
+  /** Drain every pending event until 1.5 s of silence — expectNoEvent
+   *  counts the QUEUE, and legitimate earlier traffic (pairing, prior
+   *  rows) leaves events behind. A negative assertion is only meaningful
+   *  against an empty queue. */
+  async function drainEvents(client) {
+    for (;;) {
+      try {
+        await client.waitForEvent(() => true, 1_500, 'queue drain')
+      } catch {
+        return
+      }
+    }
+  }
+
   const { execFileSync } = await import('node:child_process')
 
   /** The noise public key of a client the harness opened (read from ITS
@@ -38,7 +52,7 @@ export async function runAdversary(t, ctx) {
   }
 
   async function spawnAdversary(name, relay, { fresh = false } = {}) {
-    const process = ctx.spawnAdversary(name, relay)
+    const process = await ctx.spawnAdversary(name, relay)
     const identity = await process.request('keypair', { fresh })
     return { process, identity }
   }
@@ -61,7 +75,11 @@ export async function runAdversary(t, ctx) {
     await t.test('adversary client: version, seal, auth and size rows (honest relay)', async t => {
       const relay = ctx.spawnRelay(join(ctx.root, 'adv-relay-a'))
       await relay.start()
-      const { victim } = await pairedVictims(relay, 'a')
+      // Relay-process hygiene: a thrown row must never orphan a listener
+      // on the fixed port space (an orphaned relay silently cross-wires
+      // the NEXT run's pushes and receives).
+      try {
+      const { admitter, victim } = await pairedVictims(relay, 'a')
       const victimKey = deviceKey(victim)
       const adversary = await spawnAdversary('adv-a', relay, { fresh: true })
       const baselineCount = { messages: 0 }
@@ -112,19 +130,15 @@ export async function runAdversary(t, ctx) {
       })
 
       await t.test('malformed seal (corrupted ciphertext, valid frame): unreadable(malformed) (ADR-0031/0034)', async () => {
-        // Flip one byte inside the sealed payload: AEAD fails on open.
-        const crafted = await adversary.process.request('craftAndPush', {
+        // The corruption lands inside the sealed payload (the AEAD
+        // ciphertext) — proto and frame stay well-formed; only the seal
+        // fails. (The envelope's LAST bytes are the version field —
+        // version = 7 in the proto — so corrupting there would exercise
+        // the senderOutdated row instead.)
+        const corrupted = await adversary.process.request('craftAndPush', {
           recipient: victimKey,
-          bodyHex: hex('uncorrupted twin'),
-          // Dry-run shape: we push the REAL one here and corrupt for the
-          // second push — see below; this first push is a member-filter
-          // non-member drop, which is fine (no event either way).
-        })
-        strictEqual(crafted.outcome, 'ack')
-        const envelope = Buffer.from(crafted.envelopeHex, 'hex')
-        envelope[envelope.length - 1] ^= 0x01 // inside the ciphertext
-        const corrupted = await adversary.process.request('pushFrame', {
-          frameHex: pushFrameHex(victimKey, envelope),
+          bodyHex: hex('corrupted seal'),
+          corruptPayload: true,
         })
         strictEqual(corrupted.outcome, 'ack')
         await victim.waitForEvent(
@@ -132,7 +146,7 @@ export async function runAdversary(t, ctx) {
           15_000,
           'unreadable(malformed) for the corrupted seal',
         )
-        await victim.expectNoEvent(value => value.event === 'message' && textOf(value) === 'uncorrupted twin', 4_000, 'the corrupted blob reaching the handler')
+        await victim.expectNoEvent(value => value.event === 'message' && textOf(value) === 'corrupted seal', 4_000, 'the corrupted blob reaching the handler')
       })
 
       await t.test('unknown message tag inside a VALID seal: unreadable(malformed)', async () => {
@@ -164,7 +178,16 @@ export async function runAdversary(t, ctx) {
         await victim.expectNoEvent(value => value.event === 'message' && textOf(value) === 'ancient history', 4_000, 'the expired blob reaching the handler')
       })
 
-      await t.test('unauthorized manifest (signed by a key the group never admitted): unreadable(unauthorized), never applied (ADR-0027; roadmap#4 variant 3)', async () => {
+      await t.test('manifest from a key the group never admitted: silently dropped, never applied (ADR-0023/0027; roadmap#4 variant 3)', async () => {
+        // The update path rejects a non-member signer BEFORE validation and
+        // without an issue — strangers get zero signal (session/mod.rs:
+        // "the Envelope signer must be a current member", silent return).
+        // `unauthorized` is reserved for an AUTHENTICATED-but-unacceptable
+        // manifest (a member's foreign/over-bound manifest — the
+        // hostile-member row below).
+        // Drain the join-time membersChanged still queued from pairing
+        // (expectNoEvent counts queued events, not only fresh ones).
+        await victim.waitForEvent(value => value.kind === 'membersChanged', 5_000, 'the join membersChanged').catch(() => {})
         const before = (await victim.request('members')).members.length
         const manifest = await adversary.process.request('craftManifest', {
           groupId: 'ab'.repeat(32), // a foreign group id — a non-member knows nothing real
@@ -176,13 +199,9 @@ export async function runAdversary(t, ctx) {
           messageHex: manifest.messageHex,
         })
         strictEqual(push.outcome, 'ack')
-        await victim.waitForEvent(
-          value => value.event === 'issue' && value.kind === 'unauthorized',
-          15_000,
-          'unauthorized for the foreign manifest',
-        )
+        await victim.expectNoEvent(value => value.event === 'issue', 5_000, 'any issue from a stranger\'s manifest')
         const after = (await victim.request('members')).members.length
-        strictEqual(after, before, 'the unauthorized manifest must not change membership')
+        strictEqual(after, before, 'the foreign manifest must not change membership')
         await victim.expectNoEvent(value => value.kind === 'membersChanged', 4_000, 'a membersChanged fired by the hostile manifest')
       })
 
@@ -205,14 +224,19 @@ export async function runAdversary(t, ctx) {
         baselineCount.messages = 0
       })
 
-      await t.test('oversize: the relay refuses past its ceiling with the typed tooLarge (ADR-0025, RELAY-5/8)', async () => {
-        // 65,483 bytes of envelope body — one past the 65,482 frame ceiling.
+      await t.test('oversize: past the frame ceiling the Noise layer refuses locally; over an operator-lowered limit the relay refuses with typed tooLarge (ADR-0025, RELAY-5/8)', async () => {
+        // 65,483 bytes of envelope body — one past the 65,482 ceiling: the
+        // frame (32-byte prefix + body + 5-byte header) exceeds the u16
+        // Noise frame ceiling (65,519), so the NOISE layer refuses the send
+        // before the relay can see it (NOISE-4: the frame ceiling is the
+        // source of the size limit).
         const huge = Buffer.alloc(65_483, 0x41)
         const refused = await adversary.process.request('pushFrame', {
           frameHex: pushFrameHex(victimKey, huge),
         })
-        strictEqual(refused.outcome, 'refused', 'an over-ceiling push must be refused, not stored')
-        ok(/tooLarge/i.test(refused.refusal), `typed tooLarge expected, got ${refused.refusal}`)
+        strictEqual(refused.outcome, 'error', 'an over-ceiling frame can never reach the relay')
+        ok(/large|frame|size/i.test(refused.error), `a size error expected, got ${refused.error}`)
+        await victim.expectNoEvent(value => value.event === 'message', 3_000, 'a delivery of the un-framable blob')
 
         // An operator-lowered limit refuses proportionally (ADR-0025:
         // operators may only lower) — and the refusal is typed the same.
@@ -251,16 +275,17 @@ export async function runAdversary(t, ctx) {
       })
 
       await t.test('hostile member: admitted, crafts a VALID member Sync (handled once), replayed bytes never handled twice (ADR-0026/0031)', async () => {
-        // The adversary joins for real — admitted through the same explicit
-        // ceremony any member uses — while KEEPING its private keys.
-        const admitter2 = await ctx.openClient('a2-admitter', { relay })
-        const { token } = await admitter2.request('startPairing')
-        const joinRequest = admitter2.waitForEvent('joinRequest', 15_000, 'joinRequest for the adversary')
+        // The adversary joins the VICTIM'S group for real — admitted
+        // through the same explicit ceremony any member uses — while
+        // KEEPING its private keys.
+        const { token } = await admitter.request('startPairing')
+        const joinRequest = admitter.waitForEvent('joinRequest', 15_000, 'joinRequest for the adversary')
+        await adversary.process.request('open')
         await adversary.process.request('joinGroup', { token })
         const incoming = await joinRequest
-        await admitter2.request('accept', { requestId: incoming.requestId })
+        await admitter.request('accept', { requestId: incoming.requestId })
         await adversary.process.waitForEvent(
-          value => value.event === 'message' && value.kind === 'groupManifest',
+          value => value.event === 'manifestChanged',
           15_000,
           'the adversary receiving its first manifest',
         )
@@ -286,31 +311,59 @@ export async function runAdversary(t, ctx) {
           5_000,
           'a second handling of the replayed envelope',
         )
+        // A MEMBER-signed manifest for a foreign group: the signer check
+        // passes (the adversary is a member), the content is unacceptable —
+        // this is the authenticated-but-unacceptable `unauthorized` case
+        // (ADR-0034 §3). Drain the admission's membersChanged first.
+        await victim.waitForEvent(value => value.kind === 'membersChanged', 5_000, 'the admission membersChanged').catch(() => {})
+        const before = (await victim.request('members')).members.length
+        const manifest = await adversary.process.request('craftManifest', {
+          groupId: 'cd'.repeat(32),
+          version: 42,
+          members: [],
+        })
+        const push2 = await adversary.process.request('craftAndPush', {
+          recipient: deviceKey(victim),
+          messageHex: manifest.messageHex,
+          sequence: 77,
+        })
+        strictEqual(push2.outcome, 'ack')
+        await victim.waitForEvent(
+          value => value.event === 'issue' && value.kind === 'unauthorized',
+          15_000,
+          'unauthorized for the member-signed foreign manifest',
+        )
+        strictEqual((await victim.request('members')).members.length, before, 'never applied')
+        await victim.expectNoEvent(value => value.kind === 'membersChanged', 4_000, 'a membersChanged from the foreign manifest')
+
         await adversary.process.request('close')
       })
 
-      await relay.stop()
+      } finally {
+        await relay.stop()
+      }
     })
 
     // ── Part B: the Hostile Relay (RELAY-14 build-tagged hooks) ─────────
     await t.test('hostile relay: corrupt, duplicate, reorder, drop, inject, replay', async t => {
       const relay = ctx.spawnHostileRelay(join(ctx.root, 'adv-relay-b'))
       await relay.start()
-      const { victim } = await pairedVictims(relay, 'b')
+      try {
+      const { admitter, victim } = await pairedVictims(relay, 'b')
       const victimKey = deviceKey(victim)
       const adversary = await spawnAdversary('adv-b', relay)
       // The adversary identity persisted from Part A — it is NOT a member
-      // of this new group; admit it (hostile-member role).
-      const admitter2 = await ctx.openClient('b-admitter2', { relay })
+      // of this new group; admit it through the victim's group's own
+      // ceremony (hostile-member role).
       {
-        const { token } = await admitter2.request('startPairing')
-        const joinRequest = admitter2.waitForEvent('joinRequest', 15_000, 'joinRequest for the adversary')
+        const { token } = await admitter.request('startPairing')
+        const joinRequest = admitter.waitForEvent('joinRequest', 15_000, 'joinRequest for the adversary')
         await adversary.process.request('open')
         await adversary.process.request('joinGroup', { token })
         const incoming = await joinRequest
-        await admitter2.request('accept', { requestId: incoming.requestId })
+        await admitter.request('accept', { requestId: incoming.requestId })
         await adversary.process.waitForEvent(
-          value => value.event === 'message' && value.kind === 'groupManifest',
+          value => value.event === 'manifestChanged',
           15_000,
           'the adversary admitted in part B',
         )
@@ -379,18 +432,32 @@ export async function runAdversary(t, ctx) {
         }
       })
 
-      await t.test('drop: withheld while the rule is set, delivered after clear (at-least-once recovery, ADR-0026)', async () => {
+      await t.test('drop: withheld while the rule is set, redelivered on the next session after clear (at-least-once recovery, ADR-0026)', async () => {
         await relay.hostileCommand({ cmd: 'set', device: '*', drop: true })
         await pushCrafted('withheld', 6)
         await victim.expectNoEvent(value => value.event === 'message' && textOf(value) === 'withheld', 4_000, 'a delivery while drop is set')
         await relay.hostileCommand({ cmd: 'clear', device: '*' })
-        // The next notify (this push) re-delivers the withheld inbox row.
-        await pushCrafted('after the clear', 7)
-        await victim.waitForEvent(value => value.event === 'message' && textOf(value) === 'withheld', 20_000, 'the withheld blob redelivered')
-        await victim.waitForEvent(value => value.event === 'message' && textOf(value) === 'after the clear', 20_000, 'the new blob delivered')
+        // The per-session delivery cursor already advanced past the
+        // withheld blob (C4), so the same session will not re-send it —
+        // the unacked row redelivers on the NEXT session (RELAY-14 README:
+        // "clearing the rule and reconnecting re-delivers"). Bounce the
+        // hostile relay: the store persists, the victim reconnects.
+        await relay.stop()
+        await relay.start()
+        await victim.waitForEvent(
+          value => value.event === 'event' && value.kind === 'connectionChanged' && value.connection.state === 'connected',
+          20_000,
+          'the victim reconnecting after the bounce',
+        )
+        await victim.waitForEvent(value => value.event === 'message' && textOf(value) === 'withheld', 25_000, 'the withheld blob redelivered on the fresh session')
+        await drainEvents(victim)
       })
 
-      await t.test('inject: a relay-delivered foreign manifest is rejected unreadable(unauthorized), never applied (G3; roadmap#4 at the relay seam)', async () => {
+      await t.test('inject: a relay-delivered foreign manifest is rejected unauthorized, never applied (G3; roadmap#4 at the relay seam)', async () => {
+        // Signed by the adversary (a real member of this group): the relay
+        // injects member-signed but group-foreign bytes under a synthetic
+        // blob id — the authenticated-but-unacceptable case.
+        await drainEvents(victim) // clear pairing/admission leftovers
         const before = (await victim.request('members')).members.length
         const manifest = await adversary.process.request('craftManifest', {
           groupId: 'cd'.repeat(32),
@@ -444,7 +511,9 @@ export async function runAdversary(t, ctx) {
 
       await t.test('replay: the relay re-serving history (original blob ids) is deduped — never handled twice (ADR-0031)', async () => {
         // Everything above already delivered + acked several blobs on this
-        // session's history; replay the whole history.
+        // session's history; replay the whole history. (The queue is empty
+        // after row 4's drain; drain again defensively.)
+        await drainEvents(victim)
         await relay.hostileCommand({ cmd: 'replay', device: victimKey, count: 0 })
         await victim.expectNoEvent(
           value => value.event === 'message',
@@ -454,7 +523,9 @@ export async function runAdversary(t, ctx) {
       })
 
       await adversary.process.request('close')
-      await relay.stop()
+      } finally {
+        await relay.stop()
+      }
     })
   } finally {
     // Hand the shared relay back to any scenario that follows.
