@@ -6,5 +6,6 @@ publish = false
 
 [dependencies]
 base64 = "0.22"
+ed25519-dalek = "2"
 serde_json = "1"
 trueseal-sync = { path = "../../../trueseal-sync" }
