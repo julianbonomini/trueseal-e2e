@@ -117,10 +117,13 @@ async function spawnClient(sdk, name, relay) {
 /** One full smoke: `admitterSdk` pairs `joinerSdk` in explicitly, both
  *  directions deliver, and removal silences the removed device (ADR-0027:
  *  the wiped device cannot send, and fan-out stops addressing it). */
-async function smoke(admitterSdk, joinerSdk, relay, clients) {
+async function smoke(admitterSdk, joinerSdk, relay, clients, runId) {
   const label = `${admitterSdk} admits ${joinerSdk}`
-  const admitter = await spawnClient(admitterSdk, `${label}-host`, relay)
-  const joiner = await spawnClient(joinerSdk, `${label}-joiner`, relay)
+  // Distinct state dirs per run: for same-SDK pairs both runs carry the
+  // same label, so the run id keeps the second run from reopening the
+  // first run's stores (alreadyInGroup).
+  const admitter = await spawnClient(admitterSdk, `${runId}-host`, relay)
+  const joiner = await spawnClient(joinerSdk, `${runId}-joiner`, relay)
   clients.push(admitter, joiner)
   notStrictEqual(admitter.me.id, joiner.me.id, 'two distinct identities')
 
@@ -138,7 +141,7 @@ async function smoke(admitterSdk, joinerSdk, relay, clients) {
     strictEqual(textOf(first), `${label}:a2b`)
     strictEqual(first.message.id, firstId)
     ok(firstId.startsWith('tsm1_'), 'MessageId carries the tsm1_ prefix')
-    strictEqual(first.message.sender.id, admitter.me.id)
+    strictEqual(first.message.from.id, admitter.me.id)
   })
 
   const toAdmitter = admitter.waitForEvent(
@@ -152,7 +155,7 @@ async function smoke(admitterSdk, joinerSdk, relay, clients) {
     strictEqual(textOf(second), `${label}:b2a`)
     strictEqual(second.message.id, secondId)
     notStrictEqual(second.message.id, first.message.id)
-    strictEqual(second.message.sender.id, joiner.me.id)
+    strictEqual(second.message.from.id, joiner.me.id)
   })
 
   const removed = joiner.waitForEvent(
@@ -187,10 +190,10 @@ test(`G2 interop smoke: ${sdkA} ↔ ${sdkB} over a real relay (Protocol v1)`, { 
   try {
     await relay.start()
     await t.test(`${sdkA} admits ${sdkB}`, async () => {
-      await smoke(sdkA, sdkB, relay, clients)
+      await smoke(sdkA, sdkB, relay, clients, 'run-1')
     })
     await t.test(`${sdkB} admits ${sdkA}`, async () => {
-      await smoke(sdkB, sdkA, relay, clients)
+      await smoke(sdkB, sdkA, relay, clients, 'run-2')
     })
   } finally {
     await Promise.allSettled(clients.map(client => client.stop()))

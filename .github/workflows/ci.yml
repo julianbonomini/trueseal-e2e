@@ -71,9 +71,9 @@ jobs:
           - lane: interop-swift-swift
             os: macos-latest
             command: node scripts/run-interop.mjs swift-swift --mode gate
-          - lane: interop-swift-ts
+          - lane: interop-ts-swift
             os: macos-latest
-            command: node scripts/run-interop.mjs swift-ts --mode gate
+            command: node scripts/run-interop.mjs ts-swift --mode gate
           - lane: interop-swift-kotlin
             os: macos-latest
             command: node scripts/run-interop.mjs swift-kotlin --mode gate
@@ -181,9 +181,9 @@ jobs:
             os: macos-latest
             command: node scripts/run-interop.mjs swift-swift --mode dev
             needs_swift: true
-          - lane: interop-swift-ts
+          - lane: interop-ts-swift
             os: macos-latest
-            command: node scripts/run-interop.mjs swift-ts --mode dev
+            command: node scripts/run-interop.mjs ts-swift --mode dev
             needs_ts: true
             needs_swift: true
           - lane: interop-swift-kotlin
