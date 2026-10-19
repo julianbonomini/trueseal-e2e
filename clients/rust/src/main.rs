@@ -408,14 +408,12 @@ fn execute(state_dir: &str, relay_host: &str, relay_pub: [u8; 32], message: &Val
         "acceptMember" => Ok(json!(session()?
             .accept_member(message["token"].as_str().ok_or("missing token")?)
             .map_err(|e| e.to_string())?)),
+        // The canonical Member shape is {id, name} — raw keys are what the
+        // harness's device-key helper reads from the fixture store.
         "members" => Ok(json!(session()?
             .members()
             .into_iter()
-            .map(|member| json!({
-                "noisePub": encode_hex(&member.noise_pub.0),
-                "signingPub": encode_hex(&member.signing_pub.0),
-                "name": member.name,
-            }))
+            .map(|member| json!({ "id": member.id, "name": member.name }))
             .collect::<Vec<_>>())),
         "send" => {
             let data = BASE64_STANDARD
