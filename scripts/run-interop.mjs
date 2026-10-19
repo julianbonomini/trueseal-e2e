@@ -1,27 +1,60 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   buildRelay,
   buildTypeScriptSdk,
-  laneNotRunPolicy,
   parseMode,
   prepareWorkspace,
 } from '../lib/workspace.mjs'
-import { fetchSwiftCoreArtifact } from '../lib/sdk-drivers.mjs'
+import { assertProtocolMatchesSharedFacts, sdkDriver } from '../lib/sdk-drivers.mjs'
 
-const adapter = process.argv[2]
-if (!['rust', 'swift'].includes(adapter)) {
-  throw new Error('usage: node scripts/run-interop.mjs <rust|swift> --mode <gate|dev>')
+// The G2 Interop Smoke runner (E2E-4, #8): one command per SDK PAIR —
+//   node scripts/run-interop.mjs <ts-ts|ts-swift|ts-kotlin|swift-swift|swift-kotlin|kotlin-kotlin> --mode <gate|dev>
+//
+// Topology (e2e ADR-0001: "A lane the host can't run, such as Swift off
+// macOS, reports 'not run', and the gate counts that as a failure"):
+// Swift drivers are macOS-only; the Kotlin JVM driver's pinned native
+// artifact is Linux-x64-only. The harness is single-host, so pairs are
+// assigned to the one runner OS that hosts both sides:
+//   ubuntu-latest: ts-ts, ts-kotlin, kotlin-kotlin   (Kotlin's pinned .so)
+//   macos-latest:  swift-swift, swift-ts, swift-kotlin (Kotlin builds the
+//                  pinned core's cdylib from source — see
+//                  lib/sdk-drivers.mjs; the pinned INPUT is the same
+//                  pins.json SHA either way, G8)
+// A pair scheduled on the wrong host is a wiring bug: this runner fails
+// loudly (exit 1) rather than skipping.
+//
+// The pre-E2E-4 Rust↔TS lane is RETIRED (per the issue: the Rust client is
+// not an SDK — its code is E2E-5's Adversary Client base, tracked in #9).
+
+const PAIRS = ['ts-ts', 'ts-swift', 'ts-kotlin', 'swift-swift', 'swift-kotlin', 'kotlin-kotlin']
+
+const pair = process.argv[2]
+if (!PAIRS.includes(pair)) {
+  throw new Error(`usage: node scripts/run-interop.mjs <${PAIRS.join('|')}> --mode <gate|dev>`)
 }
+const [sdkA, sdkB] = pair.split('-')
+const sdks = [...new Set([sdkA, sdkB])]
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const mode = parseMode(process.argv.slice(3))
-const layout = prepareWorkspace(mode)
 
-const artifacts = mkdtempSync(join(tmpdir(), `trueseal-${adapter}-build-`))
+// Host capability: fail loudly on a mis-scheduled leg (never a silent
+// skip — the gate counts an unrunnable pair as a failure by design).
+if (sdks.includes('swift') && process.platform !== 'darwin') {
+  console.error(`NOT RUN — pair ${pair} needs macOS (the Swift driver is macOS-only); this leg is mis-scheduled`)
+  process.exit(1)
+}
+if (sdks.includes('kotlin') && !['darwin', 'linux'].includes(process.platform)) {
+  console.error(`NOT RUN — pair ${pair}: the Kotlin JVM driver runs on Linux (pinned artifact) or macOS (source-built pinned core), not ${process.platform}`)
+  process.exit(1)
+}
+
+const layout = prepareWorkspace(mode)
+const artifacts = mkdtempSync(join(tmpdir(), `trueseal-interop-${pair}-build-`))
 const relayBin = join(artifacts, 'trueseal-relay')
 
 process.on('exit', () => {
@@ -39,91 +72,54 @@ function run(command, args, cwd, extraEnv = {}) {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
-/** Returns true when the command succeeded. */
-function tryRun(command, args, cwd, extraEnv = {}) {
-  const result = spawnSync(command, args, {
-    cwd,
+// The protocol's vocabularies must match the pinned core's Shared Facts —
+// drift fails the lane before anything builds (G12 discipline).
+assertProtocolMatchesSharedFacts(layout)
+
+if (sdks.includes('ts')) buildTypeScriptSdk(layout.tsRepo, run)
+buildRelay(layout.relayRepo, relayBin, run)
+for (const sdk of sdks) sdkDriver(sdk).build(layout, run, artifacts)
+
+execFileSync(resolve(relayBin), ['-h'], { stdio: 'ignore' })
+
+const evidenceDir = process.env.TRUESEAL_E2E_EVIDENCE_DIR ?? join(repo, 'gates', 'evidence')
+const pins = mode === 'gate'
+  ? JSON.parse(readFileSync(join(repo, 'pins.json'), 'utf8')).pins
+  : undefined
+
+execFileSync(
+  process.execPath,
+  ['--test', '--test-force-exit', join(repo, 'test', 'interop-pair.test.mjs')],
+  {
+    cwd: repo,
     stdio: 'inherit',
-    env: { ...process.env, ...extraEnv },
-  })
-  if (result.error) throw result.error
-  return result.status === 0
-}
-
-if (process.env.TRUESEAL_E2E_SKIP_PREPARE !== '1') {
-  buildTypeScriptSdk(layout.tsRepo, run)
-  buildRelay(layout.relayRepo, relayBin, run)
-} else if (!process.env.TRUESEAL_RELAY_BIN) {
-  buildRelay(layout.relayRepo, relayBin, run)
-}
-
-const effectiveRelayBin = resolve(process.env.TRUESEAL_RELAY_BIN ?? relayBin)
-let adapterBin = process.env.TRUESEAL_E2E_ADAPTER_BIN
-let adapterBuilt = Boolean(adapterBin)
-
-if (!adapterBin && adapter === 'rust') {
-  const target = join(artifacts, 'rust')
-  adapterBuilt = tryRun('cargo', [
-    'build', '--locked',
-    '--manifest-path', join(layout.rustClientDir, 'Cargo.toml'),
-    '--target-dir', target,
-  ], layout.e2eRepo)
-  adapterBin = join(target, 'debug', 'trueseal-e2e-rust-client')
-}
-
-if (!adapterBin && adapter === 'swift') {
-  // A pinned swift checkout's binaryTarget needs the core artifact fetched
-  // (the XCFramework is not in git — SWIFT-2's local path on main).
-  fetchSwiftCoreArtifact(layout.swiftRepo, run)
-  const scratch = join(artifacts, 'swift')
-  adapterBuilt = tryRun('swift', [
-    'build', '--package-path', layout.swiftClientDir,
-    '--scratch-path', scratch,
-    '--product', 'trueseal-e2e-swift-client',
-  ], layout.e2eRepo)
-  adapterBin = join(scratch, 'debug', 'trueseal-e2e-swift-client')
-}
-
-// Visible-skip discipline (e2e ADR-0001: a lane that can't run reports
-// "not run", never skips silently). A lane listed in gates/not-run.json may
-// report not-run; a lane that builds while listed FAILS — the stale entry
-// is drift and removing it is part of the tracking issue.
-const lane = `${adapter}-interop`
-const notRun = laneNotRunPolicy()[lane]
-
-if (!adapterBuilt) {
-  if (notRun) {
-    console.log('')
-    console.log('════════════════════════════════════════════════════════════════')
-    console.log(`NOT RUN — ${lane} (tracked, non-silent)`)
-    console.log(`reason: ${notRun.reason}`)
-    console.log(`tracking: ${notRun.issue}`)
-    console.log('════════════════════════════════════════════════════════════════')
-    process.exit(0)
-  }
-  console.error(`lane ${lane} failed to build and is not listed in gates/not-run.json`)
-  process.exit(1)
-}
-
-if (notRun) {
-  console.error(
-    `lane ${lane} builds, but gates/not-run.json still lists it — remove the stale entry ` +
-    `(${notRun.issue})`,
-  )
-  process.exit(1)
-}
-
-execFileSync(effectiveRelayBin, ['-h'], { stdio: 'ignore' })
-run(process.execPath, ['--test', '--test-force-exit', join(repo, 'test', 'interop.test.mjs')], repo, {
-  TRUESEAL_RELAY_BIN: effectiveRelayBin,
-  TRUESEAL_TS_REPO: layout.tsRepo,
-  TRUESEAL_E2E_ADAPTER_NAME: adapter,
-  TRUESEAL_E2E_ADAPTER_BIN: resolve(adapterBin),
-  TRUESEAL_E2E_LAYOUT: JSON.stringify({
-    e2eRepo: layout.e2eRepo,
-    tsRepo: layout.tsRepo,
-    syncRepo: layout.syncRepo,
-    kotlinRepo: layout.kotlinRepo,
-    swiftClientDir: layout.swiftClientDir,
-  }),
-})
+    env: {
+      ...process.env,
+      TRUESEAL_E2E_PAIR: pair,
+      TRUESEAL_RELAY_BIN: resolve(relayBin),
+      TRUESEAL_TS_REPO: layout.tsRepo,
+      TRUESEAL_E2E_MODE: mode,
+      TRUESEAL_E2E_EVIDENCE: join(evidenceDir, `g2-interop-${pair}.json`),
+      ...(pins ? { TRUESEAL_E2E_PINS: JSON.stringify(pins) } : {}),
+      TRUESEAL_E2E_LAYOUT: JSON.stringify({
+        e2eRepo: layout.e2eRepo,
+        tsRepo: layout.tsRepo,
+        syncRepo: layout.syncRepo,
+        relayRepo: layout.relayRepo,
+        kotlinRepo: layout.kotlinRepo,
+        swiftClientDir: layout.swiftClientDir,
+      }),
+      // Driver build() exports cross this process boundary via env (module
+      // state does not survive the node --test spawn).
+      ...(process.env.TRUESEAL_SWIFT_DRIVER_BIN
+        ? { TRUESEAL_SWIFT_DRIVER_BIN: process.env.TRUESEAL_SWIFT_DRIVER_BIN }
+        : {}),
+      ...(process.env.TRUESEAL_KOTLIN_DRIVER_CLASSPATH
+        ? { TRUESEAL_KOTLIN_DRIVER_CLASSPATH: process.env.TRUESEAL_KOTLIN_DRIVER_CLASSPATH }
+        : {}),
+      ...(process.env.TRUESEAL_KOTLIN_NATIVE_DIR
+        ? { TRUESEAL_KOTLIN_NATIVE_DIR: process.env.TRUESEAL_KOTLIN_NATIVE_DIR }
+        : {}),
+    },
+  },
+)
