@@ -41,6 +41,9 @@ async function record(name, fn) {
 
 after(() => {
   if (evidencePath) {
+    // gates/evidence/ is untracked (evidence uploads as CI artifacts), so a
+    // fresh checkout has no such directory — create it.
+    mkdirSync(dirname(evidencePath), { recursive: true })
     writeFileSync(
       evidencePath,
       JSON.stringify(
