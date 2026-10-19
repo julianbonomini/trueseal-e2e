@@ -29,11 +29,13 @@ The drivers: TypeScript (`clients/typescript.mjs`, this repo), Kotlin (`dev.true
 
 Run one lane: `node scripts/run-scenarios.mjs <ts|kotlin|swift> --mode <gate|dev>`.
 
-**The Interop Smoke** pairs the TypeScript driver with a foreign driver binary over the real relay — both sides speak Protocol v1, so the lane needs no per-adapter code. The full pairwise matrix arrives with E2E-4.
+**The Interop Smoke (G2, E2E-4)** runs every SDK pair — `ts-ts`, `ts-swift`, `ts-kotlin`, `swift-swift`, `swift-kotlin`, `kotlin-kotlin` — over a real relay, through Protocol v1 Scenario Drivers on both sides. Each pair runs twice (each side acts as admitter once) and checks explicit admission, delivery in both directions (content + MessageId + sender), and silence after removal (a typed `notMember` refusal and no fan-out). Run one pair: `node scripts/run-interop.mjs <pair> --mode <gate|dev>`.
+
+Topology: Swift drivers are macOS-only and the Kotlin JVM lane's pinned native artifact is Linux-only, and the harness is single-host — so a pair is scheduled on the one runner OS that hosts both sides. Ubuntu legs carry `ts-ts`, `ts-kotlin` and `kotlin-kotlin` (the pinned Linux .so); macOS legs carry `swift-swift`, `ts-swift` and `swift-kotlin` — the latter builds the pinned core's cdylib from source for the Kotlin driver (the pinned input is the same pins.json SHA; the harness builds the relay from pinned source the same way). A pair scheduled on a host that cannot run it fails loudly — the gate counts an unrunnable pair as a failure, never a silent skip. Per-pair results land in `gates/evidence/g2-interop-<pair>.json` and upload as Release Evidence.
 
 Each run generates a fresh relay identity, SQLite inbox, and client state under a temporary directory. Missing dependencies or an unavailable relay fail the run; tests never silently skip.
 
-The Swift interop lane runs for real (E2E-1 rebuilt the Swift client as a Protocol v1 Scenario Driver). The Rust lane reports NOT RUN: per e2e ADR-0001 "SDK matrix" the Rust client is not part of the SDK matrix — it becomes the Adversary Client base, rebuilt in E2E-5 ([#9](https://github.com/julianbonomini/trueseal-e2e/issues/9)). The skip is explicit and tracked — see [`gates/not-run.json`](gates/not-run.json). A lane that builds while it is listed there fails as drift; a lane that fails without being listed fails the run.
+The Rust client is not an SDK (e2e ADR-0001 "SDK matrix"): the Rust↔TS interop lane is retired and its code is the Adversary Client's base, rebuilt in E2E-5 ([#9](https://github.com/julianbonomini/trueseal-e2e/issues/9)). The visible-skip discipline lives in [`gates/not-run.json`](gates/not-run.json) — currently empty; a lane that builds while listed there fails as drift, and a lane that fails without being listed fails the run.
 
 Kotlin is Android-only, so running it as a desktop command-line client would bypass the public API that applications actually use. Its headless coverage arrives with E2E-1 through the test-only JVM build (KOTLIN-2); packaging is covered by the Android emulator smoke (E2E-6).
 
